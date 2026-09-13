@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="InterviewPrep - Practice job interviews across industries with timed questions, voice assistance and self-evaluation."
+    >
+
+    <title>InterviewPrep | Smart Interview Practice</title>
+
+    <!-- External stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================================================
+         APP HEADER
+    ========================================================== -->
+
+    <header class="app-header">
+
+        <div class="brand">
+            <div class="brand-icon">IP</div>
+
+            <div>
+                <h1>InterviewPrep</h1>
+                <p>Practice. Improve. Get hired.</p>
+            </div>
+        </div>
+
+        <div class="header-actions">
+
+            <button
+                id="voiceAssistantButton"
+                class="icon-button"
+                type="button"
+                aria-label="Open voice assistant"
+                title="Voice Assistant"
+            >
+                🎙️
+            </button>
+
+            <button
+                id="themeButton"
+                class="icon-button"
+                type="button"
+                aria-label="Toggle theme"
+                title="Toggle theme"
+            >
+                ☀️
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================================
+         MAIN APPLICATION
+    ========================================================== -->
+
+    <main class="app-container">
+
+        <!-- =====================================================
+             SETUP SCREEN
+        ====================================================== -->
+
+        <section
+            id="setupScreen"
+            class="screen active-screen"
+            aria-labelledby="setupTitle"
+        >
+
+            <div class="hero-section">
+
+                <div class="hero-content">
+
+                    <span class="eyebrow">
+                        SMART INTERVIEW PRACTICE
+                    </span>
+
+                    <h2 id="setupTitle">
+                        Become interview-ready,
+                        <span>one question at a time.</span>
+                    </h2>
+
+                    <p>
+                        Practice realistic interview questions under
+                        time pressure, evaluate your confidence and
+                        discover where you can improve.
+                    </p>
+
+                </div>
+
+                <div class="hero-illustration" aria-hidden="true">
+                    <div class="hero-card">
+                        <span>✓</span>
+                        <strong>Practice</strong>
+                    </div>
+
+                    <div class="hero-card">
+                        <span>⏱</span>
+                        <strong>Improve</strong>
+                    </div>
+
+                    <div class="hero-card">
+                        <span>★</span>
+                        <strong>Get Hired</strong>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- Setup Card -->
+
+            <div class="setup-card">
+
+                <div class="section-heading">
+
+                    <div>
+                        <span class="step-label">STEP 1</span>
+
+                        <h3>
+                            Customize your practice session
+                        </h3>
+                    </div>
+
+                    <span class="question-count">
+                        1000+ practice scenarios
+                    </span>
+
+                </div>
+
+
+                <form id="setupForm">
+
+                    <div class="form-grid">
+
+                        <!-- Industry -->
+
+                        <div class="form-group">
+
+                            <label for="sector">
+                                Industry / Sector
+                            </label>
+
+                            <select id="sector" required>
+
+                                <option value="">
+                                    Select an industry
+                                </option>
+
+                                <option value="Software Engineering">
+                                    Software Engineering
+                                </option>
+
+                                <option value="IT/Networking">
+                                    IT / Networking
+                                </option>
+
+                                <option value="Consulting">
+                                    Consulting
+                                </option>
+
+                                <option value="Finance">
+                                    Finance
+                                </option>
+
+                                <option value="Marketing">
+                                    Marketing
+                                </option>
+
+                                <option value="HR">
+                                    Human Resources
+                                </option>
+
+                                <option value="Sales">
+                                    Sales
+                                </option>
+
+                                <option value="Data Science">
+                                    Data Science
+                                </option>
+
+                                <option value="Cloud/DevOps">
+                                    Cloud / DevOps
+                                </option>
+
+                                <option value="Customer Support">
+                                    Customer Support
+                                </option>
+
+                                <option value="Generic/Other">
+                                    Generic / Other
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+                        <!-- Interview Type -->
+
+                        <div class="form-group">
+
+                            <label for="interviewType">
+                                Interview Type
+                            </label>
+
+                            <select id="interviewType" required>
+
+                                <option value="">
+                                    Select interview type
+                                </option>
+
+                                <option value="Behavioral">
+                                    Behavioral
+                                </option>
+
+                                <option value="Technical">
+                                    Technical
+                                </option>
+
+                                <option value="HR/General">
+                                    HR / General
+                                </option>
+
+                                <option value="Case Study">
+                                    Case Study
+                                </option>
+
+                                <option value="Mixed">
+                                    Mixed
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+                        <!-- Experience -->
+
+                        <div class="form-group">
+
+                            <label for="experienceLevel">
+                                Experience Level
+                            </label>
+
+                            <select id="experienceLevel" required>
+
+                                <option value="">
+                                    Select experience level
+                                </option>
+
+                                <option value="Fresher/Entry-level">
+                                    Fresher / Entry-level
+                                </option>
+
+                                <option value="Mid-level">
+                                    Mid-level
+                                </option>
+
+                                <option value="Senior">
+                                    Senior
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+                        <!-- Timer -->
+
+                        <div class="form-group">
+
+                            <label for="timerSetting">
+                                Time per question
+                            </label>
+
+                            <div class="input-with-suffix">
+
+                                <input
+                                    id="timerSetting"
+                                    type="number"
+                                    min="30"
+                                    max="600"
+                                    value="120"
+                                    step="15"
+                                >
+
+                                <span>seconds</span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="setup-actions">
+
+                        <button
+                            type="submit"
+                            class="primary-button"
+                        >
+                            Start Interview
+                            <span>→</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            id="randomPracticeButton"
+                            class="secondary-button"
+                        >
+                            🎲 Random Practice
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+
+            <!-- Feature Cards -->
+
+            <div class="feature-grid">
+
+                <article class="feature-card">
+
+                    <div class="feature-icon">⏱️</div>
+
+                    <h3>Interview Pressure</h3>
+
+                    <p>
+                        Practice with a real countdown timer
+                        to simulate interview conditions.
+                    </p>
+
+                </article>
+
+
+                <article class="feature-card">
+
+                    <div class="feature-icon">🎙️</div>
+
+                    <h3>Voice Practice</h3>
+
+                    <p>
+                        Listen to questions and practice answering
+                        using your voice.
+                    </p>
+
+                </article>
+
+
+                <article class="feature-card">
+
+                    <div class="feature-icon">📊</div>
+
+                    <h3>Know Your Progress</h3>
+
+                    <p>
+                        Track confidence, timing and answers
+                        after every practice session.
+                    </p>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PRACTICE SCREEN
+        ====================================================== -->
+
+        <section
+            id="practiceScreen"
+            class="screen"
+            aria-labelledby="practiceTitle"
+        >
+
+            <!-- Practice top bar -->
+
+            <div class="practice-topbar">
+
+                <div>
+
+                    <span class="step-label">
+                        INTERVIEW SESSION
+                    </span>
+
+                    <h2 id="practiceTitle">
+                        Practice Question
+                    </h2>
+
+                </div>
+
+                <button
+                    id="finishSessionButton"
+                    class="danger-outline-button"
+                    type="button"
+                >
+                    Finish Session
+                </button>
+
+            </div>
+
+
+            <!-- Session information -->
+
+            <div class="session-info-grid">
+
+                <div class="info-pill">
+
+                    <span>Industry</span>
+
+                    <strong id="currentSector">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="info-pill">
+
+                    <span>Interview</span>
+
+                    <strong id="currentInterviewType">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="info-pill">
+
+                    <span>Level</span>
+
+                    <strong id="currentExperience">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="info-pill">
+
+                    <span>Progress</span>
+
+                    <strong id="progressText">
+                        Question 1 of 10
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- Progress bar -->
+
+            <div
+                class="progress-track"
+                aria-hidden="true"
+            >
+                <div
+                    id="progressBar"
+                    class="progress-fill"
+                ></div>
+            </div>
+
+
+            <!-- Timer -->
+
+            <div
+                id="timerContainer"
+                class="timer-container"
+                aria-live="polite"
+            >
+
+                <div class="timer-icon">
+                    ⏱
+                </div>
+
+                <div>
+
+                    <span>
+                        Time remaining
+                    </span>
+
+                    <strong id="timer">
+                        02:00
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- Question card -->
+
+            <div
+                id="questionCard"
+                class="question-card"
+            >
+
+                <div class="question-meta">
+
+                    <span id="questionCategory">
+                        Technical
+                    </span>
+
+                    <span id="questionLevel">
+                        Entry-level
+                    </span>
+
+                </div>
+
+
+                <h3
+                    id="questionText"
+                    tabindex="-1"
+                >
+                    Your interview question will appear here.
+                </h3>
+
+
+                <div class="question-actions">
+
+                    <button
+                        id="readQuestionButton"
+                        class="small-button"
+                        type="button"
+                    >
+                        🔊 Read Question
+                    </button>
+
+                    <button
+                        id="showTipsButton"
+                        class="small-button"
+                        type="button"
+                        aria-expanded="false"
+                    >
+                        💡 Show Tips
+                    </button>
+
+                </div>
+
+
+                <!-- Tips -->
+
+                <div
+                    id="tipsPanel"
+                    class="tips-panel"
+                    hidden
+                >
+
+                    <div class="tip-section">
+
+                        <h4>
+                            💡 Tip
+                        </h4>
+
+                        <p id="tipText"></p>
+
+                    </div>
+
+                    <div class="tip-section">
+
+                        <h4>
+                            🧩 Answer Structure
+                        </h4>
+
+                        <p id="outlineText"></p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Answer area -->
+
+            <div class="answer-card">
+
+                <div class="answer-header">
+
+                    <div>
+
+                        <label for="answerText">
+                            Your Answer
+                        </label>
+
+                        <p>
+                            Speak naturally or type your answer below.
+                        </p>
+
+                    </div>
+
+                    <button
+                        id="voiceAnswerButton"
+                        class="voice-button"
+                        type="button"
+                    >
+                        🎙️ Voice Answer
+                    </button>
+
+                </div>
+
+
+                <textarea
+                    id="answerText"
+                    rows="9"
+                    placeholder="Type your interview answer here..."
+                    aria-label="Your interview answer"
+                ></textarea>
+
+
+                <div class="answer-footer">
+
+                    <span id="wordCount">
+                        0 words
+                    </span>
+
+                    <span id="answerStatus">
+                        Not submitted
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- Confidence evaluation -->
+
+            <div
+                id="evaluationCard"
+                class="evaluation-card"
+            >
+
+                <div>
+
+                    <h3>
+                        How confident do you feel about this answer?
+                    </h3>
+
+                    <p>
+                        Your rating is private and is used only
+                        for this session's summary.
+                    </p>
+
+                </div>
+
+
+                <div
+                    class="confidence-buttons"
+                    role="radiogroup"
+                    aria-label="Confidence rating"
+                >
+
+                    <button
+                        type="button"
+                        class="confidence-button"
+                        data-rating="1"
+                        aria-label="1 out of 5"
+                    >
+                        ★
+                    </button>
+
+                    <button
+                        type="button"
+                        class="confidence-button"
+                        data-rating="2"
+                        aria-label="2 out of 5"
+                    >
+                        ★
+                    </button>
+
+                    <button
+                        type="button"
+                        class="confidence-button"
+                        data-rating="3"
+                        aria-label="3 out of 5"
+                    >
+                        ★
+                    </button>
+
+                    <button
+                        type="button"
+                        class="confidence-button"
+                        data-rating="4"
+                        aria-label="4 out of 5"
+                    >
+                        ★
+                    </button>
+
+                    <button
+                        type="button"
+                        class="confidence-button"
+                        data-rating="5"
+                        aria-label="5 out of 5"
+                    >
+                        ★
+                    </button>
+
+                </div>
+
+                <p
+                    id="confidenceLabel"
+                    class="confidence-label"
+                >
+                    Select a confidence rating
+                </p>
+
+            </div>
+
+
+            <!-- Navigation -->
+
+            <div class="question-navigation">
+
+                <button
+                    id="previousButton"
+                    class="secondary-button"
+                    type="button"
+                >
+                    ← Previous
+                </button>
+
+                <button
+                    id="nextButton"
+                    class="primary-button"
+                    type="button"
+                >
+                    Next Question →
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             SUMMARY SCREEN
+        ====================================================== -->
+
+        <section
+            id="summaryScreen"
+            class="screen"
+            aria-labelledby="summaryTitle"
+        >
+
+            <div class="summary-header">
+
+                <span class="eyebrow">
+                    SESSION COMPLETE
+                </span>
+
+                <h2 id="summaryTitle">
+                    Great work! 🎉
+                </h2>
+
+                <p>
+                    Here's how your interview practice session went.
+                </p>
+
+            </div>
+
+
+            <!-- Summary metrics -->
+
+            <div class="summary-metrics">
+
+                <div class="metric-card">
+
+                    <span class="metric-icon">
+                        ✓
+                    </span>
+
+                    <span>
+                        Questions Attempted
+                    </span>
+
+                    <strong id="attemptedCount">
+                        0
+                    </strong>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <span class="metric-icon">
+                        ★
+                    </span>
+
+                    <span>
+                        Average Confidence
+                    </span>
+
+                    <strong id="averageConfidence">
+                        0 / 5
+                    </strong>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <span class="metric-icon">
+                        ⏱
+                    </span>
+
+                    <span>
+                        Average Time
+                    </span>
+
+                    <strong id="averageTime">
+                        0 sec
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- Chart -->
+
+            <div class="summary-card">
+
+                <div class="summary-card-header">
+
+                    <div>
+
+                        <span class="step-label">
+                            PERFORMANCE
+                        </span>
+
+                        <h3>
+                            Confidence by Question
+                        </h3>
+
+                    </div>
+
+                    <span class="chart-legend">
+                        1 = Low · 5 = High
+                    </span>
+
+                </div>
+
+
+                <div
+                    id="confidenceChart"
+                    class="confidence-chart"
+                    aria-label="Confidence rating chart"
+                >
+                    <!-- Generated by JavaScript -->
+                </div>
+
+            </div>
+
+
+            <!-- Review -->
+
+            <div class="summary-card">
+
+                <button
+                    id="reviewAnswersButton"
+                    class="review-toggle"
+                    type="button"
+                    aria-expanded="false"
+                >
+                    <span>
+                        📋 Review Your Answers
+                    </span>
+
+                    <span id="reviewArrow">
+                        ▼
+                    </span>
+                </button>
+
+
+                <div
+                    id="reviewAnswers"
+                    class="review-list"
+                    hidden
+                >
+                    <!-- Generated by JavaScript -->
+                </div>
+
+            </div>
+
+
+            <!-- Summary actions -->
+
+            <div class="summary-actions">
+
+                <button
+                    id="newSessionButton"
+                    class="primary-button"
+                    type="button"
+                >
+                    Start New Session
+                </button>
+
+                <button
+                    id="randomSummaryButton"
+                    class="secondary-button"
+                    type="button"
+                >
+                    🎲 Random Question
+                </button>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- =========================================================
+         VOICE ASSISTANT MODAL
+    ========================================================== -->
+
+    <div
+        id="voiceModal"
+        class="modal"
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="voiceModalTitle"
+    >
+
+        <div class="modal-overlay"></div>
+
+        <div class="voice-modal-card">
+
+            <button
+                id="closeVoiceModal"
+                class="modal-close"
+                type="button"
+                aria-label="Close voice assistant"
+            >
+                ×
+            </button>
+
+            <div class="voice-animation">
+                🎙️
+            </div>
+
+            <h2 id="voiceModalTitle">
+                Voice Assistant
+            </h2>
+
+            <p>
+                Use your voice to practice interview answers.
+            </p>
+
+            <div
+                id="voiceStatus"
+                class="voice-status"
+            >
+                Ready
+            </div>
+
+            <button
+                id="modalVoiceButton"
+                class="primary-button voice-large-button"
+                type="button"
+            >
+                🎙️ Start Speaking
+            </button>
+
+            <p class="voice-note">
+                Voice recognition depends on browser support.
+                Chrome and Edge generally provide the best support.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <!-- Toast notification -->
+
+    <div
+        id="toast"
+        class="toast"
+        role="status"
+        aria-live="polite"
+    >
+        Notification
+    </div>
+
+
+    <!-- Application JavaScript -->
+    <script src="script.js"></script>
+
+</body>
+</html>
