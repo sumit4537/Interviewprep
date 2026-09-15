@@ -2886,11 +2886,18 @@ async function createPersistentInterviewSession(mode = "pressure") {
         started_at: appState.dbSessionStartedAt || new Date().toISOString()
     };
 
-    const { data, error } = await supabaseClient
-        .from("interview_sessions")
-        .insert(payload)
-        .select("id")
-        .single();
+    let data, error;
+    try {
+        ({ data, error } = await supabaseClient
+            .from("interview_sessions")
+            .insert(payload)
+            .select("id")
+            .single());
+    } catch (networkError) {
+        console.error("Could not create interview session (network):", networkError);
+        showToast(friendlyNetworkMessage(), "error");
+        return false;
+    }
 
     if (error) {
         console.error("Could not create interview session:", error);
@@ -2927,9 +2934,16 @@ async function persistInterviewAnswer(record) {
         mode: appState.dbSessionMode || "pressure"
     };
 
-    const { error } = await supabaseClient
-        .from("interview_answers")
-        .upsert(payload, { onConflict: "session_id,question_id" });
+    let error;
+    try {
+        ({ error } = await supabaseClient
+            .from("interview_answers")
+            .upsert(payload, { onConflict: "session_id,question_id" }));
+    } catch (networkError) {
+        console.error("Could not save interview answer (network):", networkError);
+        showToast("Your answer couldn't be saved — check your connection.", "error");
+        return false;
+    }
 
     if (error) {
         console.error("Could not save interview answer:", error);
@@ -2952,16 +2966,23 @@ async function completePersistentInterviewSession() {
         ? answers.reduce((sum, item) => sum + Number(item.timeTaken || 0), 0) / answers.length
         : null;
 
-    const { error } = await supabaseClient
-        .from("interview_sessions")
-        .update({
-            question_count: answers.length,
-            average_confidence: averageConfidence,
-            average_time_seconds: averageTime,
-            completed_at: new Date().toISOString()
-        })
-        .eq("id", appState.dbSessionId)
-        .eq("user_id", authState.user.id);
+    let error;
+    try {
+        ({ error } = await supabaseClient
+            .from("interview_sessions")
+            .update({
+                question_count: answers.length,
+                average_confidence: averageConfidence,
+                average_time_seconds: averageTime,
+                completed_at: new Date().toISOString()
+            })
+            .eq("id", appState.dbSessionId)
+            .eq("user_id", authState.user.id));
+    } catch (networkError) {
+        console.error("Could not complete interview session (network):", networkError);
+        showToast("Your session summary couldn't be saved — check your connection.", "error");
+        return false;
+    }
 
     if (error) {
         console.error("Could not complete interview session:", error);
@@ -3755,23 +3776,30 @@ async function signupUser() {
     const submitButton = authElement("signupSubmitBtn");
     setAuthLoading(submitButton, true, "Creating account...");
 
-    const { data, error } =
-        await supabaseClient.auth.signUp({
-            email,
-            password,
-            options: {
-                emailRedirectTo: `${window.location.origin}${window.location.pathname}#verify-email`,
-                data: {
-                    first_name: firstName,
-                    last_name: lastName,
-                    username,
-                    date_of_birth: dateOfBirth,
-                    country,
-                    signup_phone: phone,
-                    marketing_opt_in: marketing
+    let data, error;
+    try {
+        ({ data, error } =
+            await supabaseClient.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}${window.location.pathname}#verify-email`,
+                    data: {
+                        first_name: firstName,
+                        last_name: lastName,
+                        username,
+                        date_of_birth: dateOfBirth,
+                        country,
+                        signup_phone: phone,
+                        marketing_opt_in: marketing
+                    }
                 }
-            }
-        });
+            }));
+    } catch (networkError) {
+        setAuthLoading(submitButton, false);
+        showAuthMessage("signupMessage", friendlyNetworkMessage(), "error");
+        return;
+    }
 
     setAuthLoading(submitButton, false);
 
@@ -3868,11 +3896,18 @@ async function loginUser() {
     const submitButton = authElement("loginSubmitBtn");
     setAuthLoading(submitButton, true, "Logging in...");
 
-    const { data, error } =
-        await supabaseClient.auth.signInWithPassword({
-            email,
-            password
-        });
+    let data, error;
+    try {
+        ({ data, error } =
+            await supabaseClient.auth.signInWithPassword({
+                email,
+                password
+            }));
+    } catch (networkError) {
+        setAuthLoading(submitButton, false);
+        showAuthMessage("loginMessage", friendlyNetworkMessage(), "error");
+        return;
+    }
 
     setAuthLoading(submitButton, false);
 
@@ -4751,6 +4786,115 @@ function setAuthHeaderFallback() {
     guest?.classList.remove("hidden");
     user?.classList.add("hidden");
 }
+
+
+/* =========================================================
+   GLOBAL TOAST NOTIFICATIONS
+========================================================= */
+
+function showToast(message, type = "info", timeoutMs = 5000) {
+    const container = document.getElementById("toastContainer");
+    if (!container) return;
+
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+
+    const icon =
+        type === "error" ? "⚠" :
+        type === "success" ? "✓" : "ℹ";
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-text"></span>
+        <button class="toast-dismiss" type="button" aria-label="Dismiss">✕</button>
+    `;
+    toast.querySelector(".toast-text").textContent = message;
+
+    const remove = () => {
+        toast.classList.add("leaving");
+        setTimeout(() => toast.remove(), 250);
+    };
+
+    toast.querySelector(".toast-dismiss").addEventListener("click", remove);
+    container.appendChild(toast);
+
+    if (timeoutMs) {
+        setTimeout(remove, timeoutMs);
+    }
+}
+
+/*
+  A network call is treated as "offline/unreachable" (rather than a normal
+  Supabase-returned {error}) when the fetch itself throws. This is the case
+  that previously left buttons stuck on "Loading..." forever, since the code
+  after the await never ran.
+*/
+function isNetworkFailure(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return (
+        message.includes("failed to fetch") ||
+        message.includes("network") ||
+        message.includes("load failed") ||
+        !navigator.onLine
+    );
+}
+
+function friendlyNetworkMessage() {
+    return navigator.onLine
+        ? "Couldn't reach the server. Please try again in a moment."
+        : "You're offline. Check your connection and try again.";
+}
+
+
+/* =========================================================
+   OFFLINE / ONLINE BANNER
+========================================================= */
+
+function ensureOfflineBanner() {
+    let banner = document.getElementById("offlineBanner");
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "offlineBanner";
+        banner.className = "offline-banner";
+        banner.textContent = "You're offline — some features won't work until you reconnect.";
+        document.body.prepend(banner);
+    }
+    return banner;
+}
+
+window.addEventListener("offline", () => {
+    ensureOfflineBanner().classList.add("visible");
+});
+
+window.addEventListener("online", () => {
+    const banner = document.getElementById("offlineBanner");
+    if (banner) banner.classList.remove("visible");
+    showToast("Back online.", "success", 3000);
+});
+
+
+/* =========================================================
+   GLOBAL SAFETY NET
+   Catches any network/promise failure not already handled
+   locally (e.g. a Supabase call that throws instead of
+   resolving with {error}), so the UI never silently hangs
+   with no feedback to the user.
+========================================================= */
+
+window.addEventListener("unhandledrejection", (event) => {
+    console.error("Unhandled error:", event.reason);
+
+    if (isNetworkFailure(event.reason)) {
+        showToast(friendlyNetworkMessage(), "error");
+    }
+
+    // Reset any button left stuck in a loading state by an
+    // uncaught rejection, so the UI never looks permanently frozen.
+    document.querySelectorAll(".btn-loading").forEach(button => {
+        setAuthLoading(button, false);
+    });
+});
+
 
 /*
   Run after the existing InterviewPrep application has initialized.

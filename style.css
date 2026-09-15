@@ -2490,6 +2490,10 @@ textarea:focus-visible {
     transform: translateX(120%);
 }
 
+.btn-loading::after {
+    display: none;
+}
+
 
 /* --- Footer text --- */
 
@@ -2665,4 +2669,152 @@ textarea:focus-visible {
         padding: 32px 24px;
         border-radius: 22px;
     }
+}
+
+
+/* =========================================================
+   GLOBAL TOAST NOTIFICATIONS
+========================================================= */
+
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    width: min(420px, calc(100% - 32px));
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+
+    padding: 14px 16px;
+    border-radius: 12px;
+
+    background: #172033;
+    color: white;
+    font-size: .88rem;
+    font-weight: 600;
+    line-height: 1.4;
+
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .25);
+    pointer-events: auto;
+
+    animation: toastIn .3s ease;
+}
+
+.toast.error {
+    background: #7f1d1d;
+}
+
+.toast.success {
+    background: #14532d;
+}
+
+.toast.leaving {
+    animation: toastOut .25s ease forwards;
+}
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+    to { opacity: 0; transform: translateY(8px); }
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+.toast-dismiss {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, .7);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0 0 8px;
+    flex-shrink: 0;
+}
+
+.toast-dismiss:hover {
+    color: white;
+}
+
+
+/* =========================================================
+   BUTTON LOADING STATE
+========================================================= */
+
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-loading::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    z-index: 2;
+
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, .45);
+    border-top-color: white;
+
+    animation: btnSpin .7s linear infinite;
+}
+
+.btn-secondary.btn-loading::before,
+.btn.btn-loading[class*="secondary"]::before {
+    border: 2.5px solid rgba(37, 99, 235, .25);
+    border-top-color: var(--primary);
+}
+
+@keyframes btnSpin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* =========================================================
+   OFFLINE BANNER
+========================================================= */
+
+.offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 998;
+
+    text-align: center;
+    padding: 10px 16px;
+
+    background: #7c2d12;
+    color: white;
+    font-size: .85rem;
+    font-weight: 700;
+
+    transform: translateY(-100%);
+    transition: transform .3s ease;
+}
+
+.offline-banner.visible {
+    transform: translateY(0);
 }
