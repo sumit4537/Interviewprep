@@ -560,6 +560,30 @@ function hideElement(element) {
 
 
 /* =========================================================
+   DEPLOYMENT / SESSION LIFECYCLE
+========================================================= */
+
+const APP_SESSION_RESET_KEY = "interviewprep_reset_on_next_load";
+
+function markFreshAppOnNextLoad() {
+    try {
+        sessionStorage.setItem(APP_SESSION_RESET_KEY, "1");
+    } catch (error) {
+        console.debug("Could not mark tab reset:", error);
+    }
+}
+
+function consumeFreshAppMarker() {
+    try {
+        const shouldReset = sessionStorage.getItem(APP_SESSION_RESET_KEY) === "1";
+        if (shouldReset) sessionStorage.removeItem(APP_SESSION_RESET_KEY);
+        return shouldReset;
+    } catch (error) {
+        return false;
+    }
+}
+
+/* =========================================================
    5. ROUTER
 ========================================================= */
 
@@ -576,7 +600,6 @@ function navigateTo(route) {
         "login",
         "signup",
         "verify-email",
-        "verify-phone",
         "forgot-password",
         "reset-password"
     ];
@@ -657,7 +680,6 @@ function handleRouteChange() {
         "login",
         "signup",
         "verify-email",
-        "verify-phone",
         "forgot-password",
         "reset-password"
     ];
@@ -1474,22 +1496,25 @@ $("finishSessionBtn")
 async function finishSession() {
 
     if (!appState.sessionActive && !appState.sessionAnswers.length) {
-        navigateTo("summary");
+        resetPracticeState();
+        resetUiForFreshSession();
+        navigateTo("home");
         return;
     }
 
     saveCurrentAnswer();
     stopTimer();
 
-    // Render the completed session before clearing transient practice state.
+    // Render/save the completed session first. Then immediately clear every
+    // transient practice field so the next interview starts from zero.
     updateSummary();
 
     await persistCurrentAnswerToDatabase();
     await completePersistentInterviewSession();
 
     appState.sessionActive = false;
-    resetPracticeState();
     appState.allAnswers = [];
+    resetPracticeState();
 
     navigateTo("summary");
 
@@ -2698,6 +2723,13 @@ loadVoiceQuestion();
    31. INITIAL APPLICATION LOAD
 ========================================================= */
 
+if (consumeFreshAppMarker()) {
+    // Never reopen an unfinished/finished route from the previous document.
+    // Authentication itself is intentionally preserved by Supabase.
+    window.location.hash = "#home";
+    appState.currentRoute = "home";
+}
+
 handleRouteChange();
 
 updateHomeStats();
@@ -2730,15 +2762,25 @@ function resetPracticeState() {
     appState.sessionActive = false;
     appState.voiceTranscript = "";
     appState.isListening = false;
+    appState.currentRating = 0;
+    appState.timerStartedAt = null;
 
-    // Clear only transient browser-session data. Supabase authentication is
-    // intentionally NOT cleared, so closing a tab does not log the user out.
+    // A new interview must never inherit the previous interview's questions,
+    // answers, timer or database session. Keep the completed summary only.
     try {
         sessionStorage.removeItem("interviewprep_active_session");
     } catch (error) {
         console.debug("Session storage cleanup:", error);
     }
+
+    const sector = $("industrySelect");
+    const type = $("interviewTypeSelect");
+    const level = $("experienceSelect");
+    if (sector) sector.value = "Software Engineering";
+    if (type) type.value = "Behavioral";
+    if (level) level.value = "Fresher/Entry-level";
 }
+
 
 function resetUiForFreshSession() {
     hideElement($("pressurePractice"));
@@ -2754,8 +2796,11 @@ function resetUiForFreshSession() {
 ========================================================= */
 
 function handleTabCloseCleanup() {
+    // pagehide/beforeunload can run for refresh, tab close, or leaving the
+    // document. Mark the next document load as a completely fresh app.
     resetPracticeState();
     resetUiForFreshSession();
+    markFreshAppOnNextLoad();
 }
 
 window.addEventListener("pagehide", handleTabCloseCleanup);
@@ -2942,6 +2987,7 @@ async function fetchInterviewSessions(limit = 20) {
         .from("interview_sessions")
         .select("id,user_id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,started_at,completed_at,created_at")
         .eq("user_id", authState.user.id)
+        .not("completed_at", "is", null)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -3237,7 +3283,6 @@ const AUTH_ROUTES = new Set([
     "login",
     "signup",
     "verify-email",
-    "verify-phone",
     "forgot-password",
     "reset-password"
 ]);
@@ -3261,7 +3306,6 @@ const PUBLIC_ROUTES = new Set([
     "login",
     "signup",
     "verify-email",
-    "verify-phone",
     "forgot-password",
     "reset-password"
 ]);
@@ -3605,7 +3649,7 @@ async function routeAuthGuard() {
     }
 
     if (route === "verify-phone") {
-        // SMS verification is disabled for the free deployment.
+        // Phone/SMS verification is intentionally outside the free deployment.
         routeTo("home");
         return;
     }
@@ -4300,7 +4344,7 @@ function renderProfile() {
                 : "Not verified",
         profilePhoneStatus:
             user.phone
-                ? "Configured (not required)"
+                ? "Configured (verification not required)"
                 : "Not configured"
     };
 
@@ -4511,15 +4555,6 @@ function bindAuthEvents() {
         continueAfterEmailVerification
     );
 
-    authElement("sendPhoneOtpBtn")?.addEventListener(
-        "click",
-        sendPhoneVerificationOtp
-    );
-
-    authElement("verifyPhoneOtpBtn")?.addEventListener(
-        "click",
-        verifyPhoneOtp
-    );
 
     authElement("emailRecoveryForm")?.addEventListener(
         "submit",
@@ -4529,18 +4564,6 @@ function bindAuthEvents() {
         }
     );
 
-    authElement("phoneRecoveryForm")?.addEventListener(
-        "submit",
-        event => {
-            event.preventDefault();
-            sendPhoneRecovery();
-        }
-    );
-
-    authElement("verifyRecoveryOtpBtn")?.addEventListener(
-        "click",
-        verifyPhoneRecoveryOtp
-    );
 
     authElement("resetPasswordForm")?.addEventListener(
         "submit",
@@ -4647,6 +4670,9 @@ function installAuthRouter() {
 }
 
 async function initializeAuthentication() {
+    // Phone/SMS authentication is deliberately disabled for this deployment.
+    disablePaidPhoneAuthUI();
+
     if (!authConfigured()) {
         /*
           Bug fix: previously this returned immediately without ever
