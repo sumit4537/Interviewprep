@@ -1,927 +1,836 @@
-/* ============================================================
+/* =========================================================
    INTERVIEWPREP
-   Main application logic
+   VANILLA JAVASCRIPT APPLICATION
+   =========================================================
 
    IMPORTANT:
-   - No localStorage
-   - No sessionStorage
-   - No backend
-   - All session information exists only in JavaScript memory
-   - Refreshing the page resets the session
-   ============================================================ */
+   - Practice UI state remains in JavaScript memory
+   - Supabase Auth manages its own persisted browser session
+   - Supabase is the authentication/database backend
+   - Hash routing is used to create multiple app pages
+
+========================================================= */
 
 
-/* ============================================================
-   DOM REFERENCES
-   ============================================================ */
+/* =========================================================
+   1. APPLICATION STATE
+========================================================= */
 
-const setupScreen = document.getElementById("setupScreen");
-const practiceScreen = document.getElementById("practiceScreen");
-const summaryScreen = document.getElementById("summaryScreen");
+const appState = {
 
-const setupForm = document.getElementById("setupForm");
+    currentRoute: "home",
 
-const sectorSelect = document.getElementById("sector");
-const interviewTypeSelect = document.getElementById("interviewType");
-const experienceSelect = document.getElementById("experienceLevel");
-const timerSetting = document.getElementById("timerSetting");
-
-const randomPracticeButton =
-    document.getElementById("randomPracticeButton");
-
-const randomSummaryButton =
-    document.getElementById("randomSummaryButton");
-
-const finishSessionButton =
-    document.getElementById("finishSessionButton");
-
-const newSessionButton =
-    document.getElementById("newSessionButton");
-
-const previousButton =
-    document.getElementById("previousButton");
-
-const nextButton =
-    document.getElementById("nextButton");
-
-const questionCard =
-    document.getElementById("questionCard");
-
-const questionText =
-    document.getElementById("questionText");
-
-const questionCategory =
-    document.getElementById("questionCategory");
-
-const questionLevel =
-    document.getElementById("questionLevel");
-
-const tipText =
-    document.getElementById("tipText");
-
-const outlineText =
-    document.getElementById("outlineText");
-
-const tipsPanel =
-    document.getElementById("tipsPanel");
-
-const showTipsButton =
-    document.getElementById("showTipsButton");
-
-const answerText =
-    document.getElementById("answerText");
-
-const wordCount =
-    document.getElementById("wordCount");
-
-const answerStatus =
-    document.getElementById("answerStatus");
-
-const timerElement =
-    document.getElementById("timer");
-
-const timerContainer =
-    document.getElementById("timerContainer");
-
-const progressText =
-    document.getElementById("progressText");
-
-const progressBar =
-    document.getElementById("progressBar");
-
-const currentSector =
-    document.getElementById("currentSector");
-
-const currentInterviewType =
-    document.getElementById("currentInterviewType");
-
-const currentExperience =
-    document.getElementById("currentExperience");
-
-const evaluationCard =
-    document.getElementById("evaluationCard");
-
-const confidenceButtons =
-    document.querySelectorAll(".confidence-button");
-
-const confidenceLabel =
-    document.getElementById("confidenceLabel");
-
-const attemptedCount =
-    document.getElementById("attemptedCount");
-
-const averageConfidence =
-    document.getElementById("averageConfidence");
-
-const averageTime =
-    document.getElementById("averageTime");
-
-const confidenceChart =
-    document.getElementById("confidenceChart");
-
-const reviewAnswersButton =
-    document.getElementById("reviewAnswersButton");
-
-const reviewAnswers =
-    document.getElementById("reviewAnswers");
-
-const reviewArrow =
-    document.getElementById("reviewArrow");
-
-const voiceAssistantButton =
-    document.getElementById("voiceAssistantButton");
-
-const voiceModal =
-    document.getElementById("voiceModal");
-
-const closeVoiceModal =
-    document.getElementById("closeVoiceModal");
-
-const modalVoiceButton =
-    document.getElementById("modalVoiceButton");
-
-const voiceStatus =
-    document.getElementById("voiceStatus");
-
-const readQuestionButton =
-    document.getElementById("readQuestionButton");
-
-const voiceAnswerButton =
-    document.getElementById("voiceAnswerButton");
-
-const themeButton =
-    document.getElementById("themeButton");
-
-const toast =
-    document.getElementById("toast");
-
-
-/* ============================================================
-   APPLICATION STATE
-   ============================================================ */
-
-/*
-    These variables intentionally exist only in memory.
-
-    Nothing is stored in:
-    - localStorage
-    - sessionStorage
-    - cookies
-    - IndexedDB
-*/
-
-let currentSession = {
-
-    sector: "",
-    interviewType: "",
-    experience: "",
+    currentQuestionIndex: 0,
 
     questions: [],
 
-    currentIndex: 0,
+    selectedSector: "Software Engineering",
 
-    timerSeconds: 120,
+    selectedType: "Behavioral",
 
-    questionStartTime: null,
+    selectedLevel: "Fresher/Entry-level",
+
+    questionTimeSeconds: 120,
+
+    remainingSeconds: 120,
+
+    timerStartedAt: null,
 
     timerInterval: null,
 
-    confidence: null,
+    questionStartedAt: null,
 
-    randomMode: false
-};
+    currentRating: 0,
 
+    sessionAnswers: [],
 
-/*
-    Every answer is stored here during the current session.
+    allAnswers: [],
 
-    Example:
+    voiceQuestionIndex: 0,
 
-    {
-        question: "...",
-        answer: "...",
-        rating: 4,
-        timestamp: Date,
-        timeTaken: 82
-    }
-*/
+    voiceTranscript: "",
 
-let sessionAnswers = [];
+    isListening: false,
 
+    recognition: null,
 
-/*
-    Used by the voice recognition feature.
-*/
+    sessionActive: false,
 
-let recognition = null;
-let isListening = false;
-
-
-/*
-    Prevents repeated save operations when a timer
-    automatically ends a question.
-*/
-
-let questionSavedForCurrentIndex = false;
-
-
-/* ============================================================
-   QUESTION BANK
-   ============================================================
-
-   Instead of writing 1,000+ repetitive objects manually,
-   this application uses a large structured question system.
-
-   Every combination receives:
-
-       Sector
-          ↓
-       Interview Type
-          ↓
-       Experience Level
-          ↓
-       8 questions
-
-   The generated question bank is stored in:
-
-       questionBank[sector][interviewType][level]
-
-   Each generated question contains:
-
-       {
-           question,
-           tips,
-           sampleAnswerOutline
-       }
-
-   The question templates are intentionally reusable so that
-   you can easily expand the application later.
-   ============================================================ */
-
-
-/* ============================================================
-   SECTOR-SPECIFIC FOCUS
-   ============================================================ */
-
-const sectorFocus = {
-
-    "Software Engineering":
-        "software development, programming, applications and engineering practices",
-
-    "IT/Networking":
-        "IT infrastructure, networking, systems administration and troubleshooting",
-
-    "Consulting":
-        "business problems, clients, structured problem-solving and recommendations",
-
-    "Finance":
-        "financial analysis, business performance, risk and financial decision-making",
-
-    "Marketing":
-        "customers, campaigns, branding, content, acquisition and marketing performance",
-
-    "HR":
-        "people, recruitment, employee experience, policies and workplace situations",
-
-    "Sales":
-        "customers, prospecting, negotiation, revenue and relationship management",
-
-    "Data Science":
-        "data analysis, statistics, machine learning and data-driven decision-making",
-
-    "Cloud/DevOps":
-        "cloud infrastructure, automation, deployment, reliability and DevOps practices",
-
-    "Customer Support":
-        "customers, troubleshooting, communication, service quality and issue resolution",
-
-    "Generic/Other":
-        "professional responsibilities, teamwork, problem-solving and workplace situations"
+    lastSummary: null
 
 };
 
 
-/* ============================================================
-   BEHAVIORAL QUESTION TEMPLATES
-   ============================================================ */
+/* =========================================================
+   2. QUESTION BANK
+=========================================================
 
-const behavioralTemplates = [
+   The bank is intentionally structured so you can easily
+   add more questions later.
 
-    {
-        q: "Tell me about a time you faced a difficult problem related to {focus}. How did you solve it?",
-        tip: "Use STAR: Situation, Task, Action and Result. Focus most of your answer on what YOU did.",
-        outline: "• Situation/context\n• Your responsibility\n• Actions you personally took\n• Result\n• What you learned"
+   Each question contains:
+   - question
+   - tips
+   - sampleAnswerOutline
+========================================================= */
+
+const questionBank = {
+
+    "Software Engineering": {
+
+        "Behavioral": {
+
+            "Fresher/Entry-level": [
+                {
+                    question: "Tell me about yourself and your technical background.",
+                    tips: "Use a present → past → future structure.",
+                    sampleAnswerOutline: "• Education/background\n• Technical skills\n• Projects/internship\n• What you want to do next"
+                },
+                {
+                    question: "Tell me about a challenging project you worked on.",
+                    tips: "Focus on your personal contribution.",
+                    sampleAnswerOutline: "• Project goal\n• Challenge\n• Your responsibility\n• Solution\n• Result"
+                },
+                {
+                    question: "Describe a time you made a mistake in a project.",
+                    tips: "Do not hide the mistake. Focus on learning.",
+                    sampleAnswerOutline: "• Situation\n• Mistake\n• Correction\n• Lesson learned"
+                },
+                {
+                    question: "How do you handle tight deadlines?",
+                    tips: "Show prioritization rather than simply saying you work harder.",
+                    sampleAnswerOutline: "• Understand requirements\n• Prioritize\n• Break work down\n• Communicate blockers\n• Deliver"
+                },
+                {
+                    question: "Tell me about a time you worked in a team.",
+                    tips: "Highlight collaboration and communication.",
+                    sampleAnswerOutline: "• Team objective\n• Your role\n• Collaboration\n• Challenge\n• Result"
+                },
+                {
+                    question: "How do you learn a new programming language or technology?",
+                    tips: "Give a concrete learning process.",
+                    sampleAnswerOutline: "• Documentation\n• Small project\n• Practice\n• Debugging\n• Feedback"
+                },
+                {
+                    question: "What motivates you to work in software engineering?",
+                    tips: "Connect motivation to problem solving and building products.",
+                    sampleAnswerOutline: "• Interest in technology\n• Problem solving\n• Building useful systems\n• Continuous learning"
+                },
+                {
+                    question: "How do you respond when someone criticizes your code?",
+                    tips: "Show that you value constructive feedback.",
+                    sampleAnswerOutline: "• Listen\n• Understand reasoning\n• Improve code\n• Learn from review"
+                },
+                {
+                    question: "Describe a situation where you had to solve a problem independently.",
+                    tips: "Explain your thought process.",
+                    sampleAnswerOutline: "• Problem\n• Research\n• Alternatives\n• Decision\n• Outcome"
+                },
+                {
+                    question: "Where do you see yourself in the next three years?",
+                    tips: "Keep your answer realistic and role-related.",
+                    sampleAnswerOutline: "• Technical growth\n• Responsibilities\n• Contribution\n• Long-term learning"
+                }
+            ],
+
+            "Mid-level": [
+                {
+                    question: "Tell me about a difficult engineering decision you made.",
+                    tips: "Explain trade-offs.",
+                    sampleAnswerOutline: "• Context\n• Options\n• Trade-offs\n• Decision\n• Result"
+                },
+                {
+                    question: "Describe a production incident you handled.",
+                    tips: "Show calm troubleshooting and communication.",
+                    sampleAnswerOutline: "• Incident\n• Impact\n• Diagnosis\n• Fix\n• Prevention"
+                },
+                {
+                    question: "Tell me about a disagreement with another engineer.",
+                    tips: "Focus on technical reasoning rather than personalities.",
+                    sampleAnswerOutline: "• Disagreement\n• Evidence\n• Discussion\n• Resolution\n• Lesson"
+                },
+                {
+                    question: "How have you improved engineering processes?",
+                    tips: "Quantify improvements where possible.",
+                    sampleAnswerOutline: "• Existing problem\n• Proposed improvement\n• Implementation\n• Measurable result"
+                },
+                {
+                    question: "Describe a project where requirements changed significantly.",
+                    tips: "Show adaptability.",
+                    sampleAnswerOutline: "• Original requirements\n• Change\n• Impact\n• Adaptation\n• Result"
+                },
+                {
+                    question: "How do you mentor junior developers?",
+                    tips: "Mention coaching rather than simply solving problems for them.",
+                    sampleAnswerOutline: "• Understand gap\n• Explain concepts\n• Pair programming\n• Feedback\n• Growth"
+                },
+                {
+                    question: "Tell me about a time you improved system performance.",
+                    tips: "Include measurable impact.",
+                    sampleAnswerOutline: "• Bottleneck\n• Investigation\n• Change\n• Measurement\n• Result"
+                },
+                {
+                    question: "How do you balance technical debt with feature development?",
+                    tips: "Discuss business and engineering trade-offs.",
+                    sampleAnswerOutline: "• Identify debt\n• Risk\n• Prioritize\n• Allocate time\n• Monitor"
+                }
+            ],
+
+            "Senior": [
+                {
+                    question: "Tell me about a major architectural decision you led.",
+                    tips: "Explain technical and business trade-offs.",
+                    sampleAnswerOutline: "• Problem\n• Constraints\n• Architecture options\n• Decision\n• Impact"
+                },
+                {
+                    question: "Describe a major engineering failure and what you learned.",
+                    tips: "Take ownership.",
+                    sampleAnswerOutline: "• Failure\n• Root cause\n• Leadership response\n• Prevention\n• Lesson"
+                },
+                {
+                    question: "How do you create alignment across engineering teams?",
+                    tips: "Discuss communication and shared technical direction.",
+                    sampleAnswerOutline: "• Stakeholders\n• Goals\n• Architecture\n• Documentation\n• Alignment"
+                },
+                {
+                    question: "How do you evaluate technical risk?",
+                    tips: "Show systematic risk assessment.",
+                    sampleAnswerOutline: "• Identify risk\n• Probability\n• Impact\n• Mitigation\n• Monitoring"
+                },
+                {
+                    question: "Tell me about a system you scaled significantly.",
+                    tips: "Use measurable scale.",
+                    sampleAnswerOutline: "• Starting scale\n• Bottleneck\n• Architecture\n• Changes\n• New scale"
+                },
+                {
+                    question: "How do you handle disagreements among senior engineers?",
+                    tips: "Focus on evidence and decision frameworks.",
+                    sampleAnswerOutline: "• Understand positions\n• Establish criteria\n• Evidence\n• Decision\n• Alignment"
+                },
+                {
+                    question: "How do you balance engineering quality and delivery speed?",
+                    tips: "Explain how you manage risk.",
+                    sampleAnswerOutline: "• Quality baseline\n• Risk assessment\n• Prioritization\n• Automation\n• Delivery"
+                },
+                {
+                    question: "What makes a strong engineering culture?",
+                    tips: "Discuss behaviors rather than slogans.",
+                    sampleAnswerOutline: "• Ownership\n• Psychological safety\n• Code quality\n• Learning\n• Accountability"
+                }
+            ]
+        },
+
+        "Technical": {
+
+            "Fresher/Entry-level": [
+                {
+                    question: "What are the four main principles of object-oriented programming?",
+                    tips: "Define each principle and give a simple example.",
+                    sampleAnswerOutline: "• Encapsulation\n• Abstraction\n• Inheritance\n• Polymorphism"
+                },
+                {
+                    question: "What is the difference between an array and a linked list?",
+                    tips: "Compare memory layout and operations.",
+                    sampleAnswerOutline: "• Memory\n• Access\n• Insert/delete\n• Complexity\n• Use cases"
+                },
+                {
+                    question: "Explain time complexity and Big O notation.",
+                    tips: "Use a simple algorithm as an example.",
+                    sampleAnswerOutline: "• Definition\n• O(1)\n• O(log n)\n• O(n)\n• O(n²)"
+                },
+                {
+                    question: "What is the difference between a process and a thread?",
+                    tips: "Focus on memory and execution.",
+                    sampleAnswerOutline: "• Process\n• Thread\n• Memory\n• Context switching\n• Use case"
+                },
+                {
+                    question: "What is an API?",
+                    tips: "Explain it as a communication interface.",
+                    sampleAnswerOutline: "• Definition\n• Request\n• Response\n• HTTP example\n• Use case"
+                },
+                {
+                    question: "What happens when you type a URL into a browser?",
+                    tips: "Walk through networking layers logically.",
+                    sampleAnswerOutline: "• DNS\n• TCP/TLS\n• HTTP\n• Server\n• Browser rendering"
+                },
+                {
+                    question: "What is a database index?",
+                    tips: "Explain the speed/storage trade-off.",
+                    sampleAnswerOutline: "• Purpose\n• Lookup\n• Speed\n• Storage\n• Trade-off"
+                },
+                {
+                    question: "What is Git and why is it used?",
+                    tips: "Mention collaboration and version history.",
+                    sampleAnswerOutline: "• Version control\n• Branches\n• Commits\n• Collaboration\n• Recovery"
+                },
+                {
+                    question: "Explain the difference between HTTP and HTTPS.",
+                    tips: "Focus on encryption and certificates.",
+                    sampleAnswerOutline: "• HTTP\n• TLS\n• Encryption\n• Certificates\n• Security"
+                },
+                {
+                    question: "What is exception handling?",
+                    tips: "Explain why applications need controlled error handling.",
+                    sampleAnswerOutline: "• Runtime errors\n• try/catch\n• Recovery\n• Logging\n• User experience"
+                }
+            ]
+        }
     },
 
-    {
-        q: "Tell me about a time you made a mistake while working on {focus}. What happened?",
-        tip: "Do not hide the mistake. Show ownership, corrective action and learning.",
-        outline: "• Briefly explain the mistake\n• Impact\n• How you fixed it\n• Preventive action\n• Lesson learned"
+
+    /* =====================================================
+       CLOUD / DEVOPS
+    ===================================================== */
+
+    "Cloud/DevOps": {
+
+        "Technical": {
+
+            "Fresher/Entry-level": [
+                {
+                    question: "What is cloud computing?",
+                    tips: "Define it and explain its advantages.",
+                    sampleAnswerOutline: "• On-demand resources\n• Internet access\n• Scalability\n• Pay-as-you-go\n• Example"
+                },
+                {
+                    question: "What is the difference between AWS EC2 and S3?",
+                    tips: "Compare compute and object storage.",
+                    sampleAnswerOutline: "• EC2 = compute\n• S3 = object storage\n• Use cases\n• Example"
+                },
+                {
+                    question: "What is Docker?",
+                    tips: "Explain containers in simple terms.",
+                    sampleAnswerOutline: "• Containerization\n• Image\n• Container\n• Portability\n• Use case"
+                },
+                {
+                    question: "What is CI/CD?",
+                    tips: "Separate continuous integration and delivery/deployment.",
+                    sampleAnswerOutline: "• CI\n• Automated tests\n• CD\n• Deployment\n• Benefits"
+                },
+                {
+                    question: "What is a virtual machine?",
+                    tips: "Compare virtualized hardware with physical machines.",
+                    sampleAnswerOutline: "• Hypervisor\n• Virtual hardware\n• Guest OS\n• Isolation"
+                },
+                {
+                    question: "What is an AWS security group?",
+                    tips: "Explain inbound and outbound traffic control.",
+                    sampleAnswerOutline: "• Virtual firewall\n• Inbound\n• Outbound\n• Rules\n• EC2"
+                },
+                {
+                    question: "What is a VPC?",
+                    tips: "Describe it as an isolated virtual network.",
+                    sampleAnswerOutline: "• Network isolation\n• Subnets\n• Routing\n• Security\n• Cloud resources"
+                },
+                {
+                    question: "What is Kubernetes?",
+                    tips: "Explain the problem it solves.",
+                    sampleAnswerOutline: "• Container orchestration\n• Pods\n• Scaling\n• Scheduling\n• Services"
+                },
+                {
+                    question: "What is infrastructure as code?",
+                    tips: "Mention automation and repeatability.",
+                    sampleAnswerOutline: "• Infrastructure definition\n• Version control\n• Automation\n• Reproducibility"
+                },
+                {
+                    question: "What is Linux commonly used for in cloud environments?",
+                    tips: "Connect Linux administration to servers.",
+                    sampleAnswerOutline: "• Servers\n• CLI\n• Packages\n• Permissions\n• Networking"
+                }
+            ]
+        }
     },
 
-    {
-        q: "Describe a situation where you had to work with someone whose approach differed from yours.",
-        tip: "Demonstrate emotional intelligence rather than criticizing the other person.",
-        outline: "• Difference in approaches\n• Why it mattered\n• Communication used\n• Compromise/collaboration\n• Outcome"
+
+    /* =====================================================
+       IT / NETWORKING
+    ===================================================== */
+
+    "IT/Networking": {
+
+        "Technical": {
+
+            "Fresher/Entry-level": [
+                {
+                    question: "What is an IP address?",
+                    tips: "Explain its purpose in network communication.",
+                    sampleAnswerOutline: "• Identifier\n• IPv4/IPv6\n• Network\n• Host"
+                },
+                {
+                    question: "What is subnetting?",
+                    tips: "Explain why networks are divided.",
+                    sampleAnswerOutline: "• Network division\n• Subnet mask\n• Efficiency\n• Security"
+                },
+                {
+                    question: "What is DNS?",
+                    tips: "Use the domain-to-IP analogy.",
+                    sampleAnswerOutline: "• Domain name\n• DNS lookup\n• IP address\n• Browser connection"
+                },
+                {
+                    question: "What is DHCP?",
+                    tips: "Explain automatic IP configuration.",
+                    sampleAnswerOutline: "• Automatic addressing\n• IP\n• Gateway\n• DNS\n• Lease"
+                },
+                {
+                    question: "What is the difference between TCP and UDP?",
+                    tips: "Compare reliability and speed.",
+                    sampleAnswerOutline: "• Connection\n• Reliability\n• Ordering\n• Speed\n• Use cases"
+                },
+                {
+                    question: "What is a router?",
+                    tips: "Explain packet forwarding between networks.",
+                    sampleAnswerOutline: "• Network device\n• Routing table\n• Packet forwarding\n• Networks"
+                },
+                {
+                    question: "What is a firewall?",
+                    tips: "Explain traffic filtering.",
+                    sampleAnswerOutline: "• Security boundary\n• Rules\n• Allow/deny\n• Inbound/outbound"
+                },
+                {
+                    question: "What is the OSI model?",
+                    tips: "Mention the seven layers and purpose.",
+                    sampleAnswerOutline: "• Physical\n• Data Link\n• Network\n• Transport\n• Session\n• Presentation\n• Application"
+                },
+                {
+                    question: "How would you troubleshoot a computer that cannot access the internet?",
+                    tips: "Use a logical troubleshooting sequence.",
+                    sampleAnswerOutline: "• Physical connection\n• IP configuration\n• Gateway\n• DNS\n• Ping\n• Browser"
+                },
+                {
+                    question: "What is the difference between a switch and a hub?",
+                    tips: "Focus on how traffic is forwarded.",
+                    sampleAnswerOutline: "• Hub broadcasts\n• Switch MAC table\n• Collision domains\n• Efficiency"
+                }
+            ]
+        }
     },
 
-    {
-        q: "Tell me about a time you had to learn something quickly to succeed in {focus}.",
-        tip: "Choose a concrete example and explain your learning strategy.",
-        outline: "• What you needed to learn\n• Why time was limited\n• Resources/method used\n• How you applied it\n• Result"
-    },
 
-    {
-        q: "Describe a time when you had competing priorities. How did you decide what to do first?",
-        tip: "Explain your prioritization criteria instead of simply saying you worked harder.",
-        outline: "• List competing priorities\n• Urgency/impact assessment\n• Prioritization method\n• Communication\n• Final result"
-    },
-
-    {
-        q: "Tell me about a time you received difficult or unexpected feedback.",
-        tip: "Show that you can accept useful criticism without becoming defensive.",
-        outline: "• Feedback context\n• Initial reaction\n• What you learned\n• Changes made\n• Long-term result"
-    },
-
-    {
-        q: "Give an example of when you took initiative in a {focus}-related situation.",
-        tip: "Choose an example where nobody had to repeatedly tell you what to do.",
-        outline: "• Problem/opportunity noticed\n• Initiative taken\n• Actions\n• Impact\n• What motivated you"
-    },
-
-    {
-        q: "Tell me about an achievement you are particularly proud of.",
-        tip: "Quantify the result where possible and explain your individual contribution.",
-        outline: "• Goal\n• Challenge\n• Your contribution\n• Measurable result\n• Why it matters"
-    }
-
-];
-
-
-/* ============================================================
-   TECHNICAL QUESTION TEMPLATES
-   ============================================================ */
-
-const technicalTemplates = {
-
-    "Software Engineering": [
-
-        ["How would you design a maintainable application for {focus}?", "Discuss separation of concerns, modularity and testing.", "• Requirements\n• Architecture\n• Modules\n• Data flow\n• Testing\n• Maintainability"],
-
-        ["Explain how you would debug a difficult production issue in {focus}.", "Show a systematic debugging process rather than guessing.", "• Reproduce/observe\n• Logs\n• Metrics\n• Hypotheses\n• Isolate root cause\n• Fix\n• Verify"],
-
-        ["How would you improve the performance of a slow {focus} application?", "Start by measuring before optimizing.", "• Define performance metric\n• Profile\n• Find bottleneck\n• Optimize\n• Benchmark\n• Monitor"],
-
-        ["What testing strategy would you use for a {focus} project?", "Mention multiple test levels and automation.", "• Unit tests\n• Integration tests\n• End-to-end tests\n• Edge cases\n• CI automation"],
-
-        ["How would you review another developer's code?", "Balance correctness, readability, maintainability and security.", "• Understand intent\n• Correctness\n• Design\n• Readability\n• Security\n• Tests\n• Constructive feedback"],
-
-        ["Explain an approach to handling failures in a {focus} system.", "Discuss graceful failure and observability.", "• Failure scenarios\n• Detection\n• Logging\n• Recovery\n• Retry/fallback\n• Monitoring"],
-
-        ["How would you design an API for a {focus} application?", "Explain resources, endpoints, validation and error handling.", "• Requirements\n• Resources\n• HTTP methods\n• Validation\n• Authentication\n• Errors\n• Documentation"],
-
-        ["How would you make a {focus} application secure?", "Cover authentication, authorization, input validation and data protection.", "• Threat model\n• Authentication\n• Authorization\n• Input validation\n• Encryption\n• Secrets\n• Monitoring"]
-
-    ],
-
-    "IT/Networking": [
-
-        ["How would you troubleshoot a connectivity problem in {focus}?", "Use a layered and systematic troubleshooting process.", "• Clarify symptom\n• Physical/link checks\n• IP configuration\n• DNS\n• Routing\n• Firewall\n• Test fix"],
-
-        ["Explain how DNS works and why it matters in {focus}.", "Walk through name resolution from client to DNS response.", "• Client request\n• Resolver\n• DNS hierarchy\n• Record lookup\n• Response\n• Caching"],
-
-        ["How would you diagnose a slow network in {focus}?", "Separate bandwidth, latency, packet loss and endpoint issues.", "• Define symptoms\n• Ping\n• Traceroute\n• Interface metrics\n• Packet loss\n• Congestion\n• Root cause"],
-
-        ["Explain the difference between TCP and UDP and when you would use each.", "Compare reliability, ordering, overhead and use cases.", "• TCP properties\n• UDP properties\n• Reliability\n• Performance\n• Examples"],
-
-        ["How would you secure a small enterprise network?", "Discuss layered security rather than one security product.", "• Segmentation\n• Firewall\n• Authentication\n• Updates\n• Monitoring\n• Backups\n• Policies"],
-
-        ["What is subnetting and why is it useful?", "Explain address efficiency, organization and routing.", "• Network/host bits\n• CIDR\n• Subnets\n• Example\n• Practical benefit"],
-
-        ["How would you investigate intermittent packet loss?", "Look for patterns rather than assuming the network is always broken.", "• Reproduce\n• Time pattern\n• Ping tests\n• Interface counters\n• Routing\n• Congestion\n• Hardware"],
-
-        ["How would you document an IT/network infrastructure environment?", "Good documentation should help another engineer operate the environment.", "• Network diagram\n• IP inventory\n• Devices\n• Configurations\n• Dependencies\n• Procedures"]
-
-    ],
-
-    "Data Science": [
-
-        ["How would you approach a new data science problem?", "Start with the business objective before selecting a model.", "• Business question\n• Data sources\n• Target\n• EDA\n• Baseline\n• Model\n• Evaluation"],
-
-        ["How would you handle missing data in a dataset?", "The right approach depends on why the data is missing.", "• Measure missingness\n• Understand cause\n• Delete/impute\n• Feature indicators\n• Validate impact"],
-
-        ["How would you detect overfitting in a machine learning model?", "Compare training and validation behavior and use appropriate validation.", "• Train/validation split\n• Learning curves\n• Cross-validation\n• Regularization\n• Simplify model"],
-
-        ["How would you explain a machine learning model to a non-technical stakeholder?", "Connect technical behavior to business outcomes.", "• Business objective\n• Simple intuition\n• Important features\n• Metrics\n• Limitations\n• Recommendation"],
-
-        ["How would you evaluate an imbalanced classification model?", "Accuracy alone can be misleading.", "• Class distribution\n• Precision\n• Recall\n• F1\n• ROC/PR metrics\n• Threshold selection"],
-
-        ["How would you improve the quality of a data pipeline?", "Think about validation, monitoring and reproducibility.", "• Input validation\n• Transformations\n• Data quality checks\n• Monitoring\n• Testing\n• Documentation"],
-
-        ["What steps would you take before training a model on a new dataset?", "Demonstrate disciplined preprocessing.", "• Understand schema\n• Explore distributions\n• Missing values\n• Outliers\n• Leakage\n• Encoding\n• Split data"],
-
-        ["How would you determine whether a model is useful in production?", "Business value matters as much as model metrics.", "• Offline metrics\n• Baseline\n• Business KPI\n• Cost\n• Reliability\n• Monitoring\n• Feedback"]
-
-    ],
-
-    "Cloud/DevOps": [
-
-        ["How would you design a reliable cloud architecture for {focus}?", "Discuss availability, scaling, monitoring and failure recovery.", "• Requirements\n• Architecture\n• Availability zones/regions\n• Scaling\n• Security\n• Monitoring\n• Disaster recovery"],
-
-        ["How would you troubleshoot a failed deployment?", "Follow deployment evidence from pipeline to infrastructure.", "• Pipeline logs\n• Build\n• Artifacts\n• Configuration\n• Permissions\n• Infrastructure\n• Rollback"],
-
-        ["Explain CI/CD and why it is useful.", "Connect automation to faster and safer software delivery.", "• Code commit\n• Build\n• Tests\n• Artifact\n• Deployment\n• Verification\n• Rollback"],
-
-        ["How would you reduce cloud infrastructure costs?", "Optimize based on measured usage rather than blindly reducing resources.", "• Usage analysis\n• Rightsizing\n• Autoscaling\n• Storage lifecycle\n• Reserved/committed options\n• Monitoring"],
-
-        ["How would you secure cloud infrastructure?", "Use identity-first and defense-in-depth principles.", "• IAM\n• Least privilege\n• Network controls\n• Encryption\n• Secrets\n• Logging\n• Monitoring"],
-
-        ["How would you monitor a production cloud application?", "Cover infrastructure, application and business signals.", "• Metrics\n• Logs\n• Traces\n• Alerts\n• Dashboards\n• SLOs\n• Incident response"],
-
-        ["What would you do if a production service became unavailable?", "Prioritize restoration first, then root-cause analysis.", "• Detect\n• Assess impact\n• Communicate\n• Mitigate\n• Restore\n• Root cause\n• Prevention"],
-
-        ["How would you automate repetitive infrastructure tasks?", "Infrastructure as code and automation should be repeatable and reviewable.", "• Identify task\n• Automation tool\n• Version control\n• Idempotency\n• Testing\n• Monitoring"]
-
-    ]
-
-};
-
-
-/*
-   Generic technical templates are used for sectors where
-   highly specialized technical questions would not make sense.
-*/
-
-const genericTechnicalTemplates = [
-
-    ["What are the most important technical concepts someone working in {focus} should understand?", "Select fundamentals and explain why they matter.", "• Core concepts\n• Practical examples\n• Common mistakes\n• Business relevance"],
-
-    ["How would you troubleshoot a difficult problem related to {focus}?", "Explain a repeatable diagnostic process.", "• Define problem\n• Gather evidence\n• Form hypotheses\n• Test\n• Fix\n• Verify"],
-
-    ["How would you improve an inefficient process in {focus}?", "Measure the current process before proposing improvements.", "• Current state\n• Bottleneck\n• Root cause\n• Improvement\n• Measurement"],
-
-    ["What tools or technologies would you use when working with {focus}?", "Choose tools based on requirements rather than popularity.", "• Requirement\n• Tool choice\n• Trade-off\n• Example\n• Validation"],
-
-    ["How would you ensure quality when delivering work related to {focus}?", "Explain checks, validation and review.", "• Requirements\n• Validation\n• Testing\n• Review\n• Documentation"],
-
-    ["What are common risks when working with {focus}?", "Mention technical, operational and business risks.", "• Risk identification\n• Impact\n• Likelihood\n• Mitigation\n• Monitoring"],
-
-    ["How would you explain a complex {focus} concept to a beginner?", "Use a simple analogy followed by a practical example.", "• Simple definition\n• Analogy\n• Example\n• Common misunderstanding"],
-
-    ["Describe a technical project involving {focus} that you would be interested in building.", "Show that you can connect technology with a useful outcome.", "• Problem\n• Users\n• Technology\n• Architecture/process\n• Success metric"]
-
-];
-
-
-/* ============================================================
-   HR / GENERAL QUESTIONS
-   ============================================================ */
-
-const hrTemplates = [
-
-    {
-        q: "Tell me about yourself and your professional background.",
-        tip: "Keep it relevant to the role. Present → Past → Future is a useful structure.",
-        outline: "• Current background\n• Relevant education/experience\n• Key strengths\n• Relevant achievement\n• Why this role"
-    },
-
-    {
-        q: "Why are you interested in this role?",
-        tip: "Connect your skills and interests to the actual responsibilities of the role.",
-        outline: "• What attracts you\n• Relevant skills\n• Career direction\n• Why this role\n• Contribution"
-    },
-
-    {
-        q: "Why should we hire you?",
-        tip: "Give 2–3 evidence-backed reasons instead of generic qualities.",
-        outline: "• Relevant skills\n• Evidence/example\n• Role fit\n• Learning ability\n• Expected contribution"
-    },
-
-    {
-        q: "What are your greatest strengths?",
-        tip: "Choose strengths that matter for the role and support each with evidence.",
-        outline: "• Strength\n• Example\n• Result\n• Relevance to role"
-    },
-
-    {
-        q: "What is one professional weakness you are currently improving?",
-        tip: "Choose a genuine but manageable weakness and show your improvement plan.",
-        outline: "• Weakness\n• Impact\n• Awareness\n• Improvement strategy\n• Progress"
-    },
-
-    {
-        q: "Where do you see yourself professionally in the next few years?",
-        tip: "Show ambition while keeping your goals realistic and connected to the role.",
-        outline: "• Skills to develop\n• Responsibilities\n• Career direction\n• Contribution"
-    },
-
-    {
-        q: "How do you handle stress or pressure at work?",
-        tip: "Explain your process for staying effective rather than claiming you never feel stressed.",
-        outline: "• Stress trigger\n• Prioritization\n• Communication\n• Coping method\n• Result"
-    },
-
-    {
-        q: "What questions would you ask us at the end of an interview?",
-        tip: "Ask questions that demonstrate curiosity about the role, team and expectations.",
-        outline: "• Role expectations\n• Team\n• Success metrics\n• Learning\n• Next steps"
-    }
-
-];
-
-
-/* ============================================================
-   CASE STUDY QUESTIONS
-   ============================================================ */
-
-const caseTemplates = [
-
-    {
-        q: "A company asks you to improve an underperforming area related to {focus}. How would you approach the problem?",
-        tip: "Do not jump immediately to solutions. Clarify the problem and structure your analysis.",
-        outline: "• Clarify objective\n• Define KPI\n• Segment problem\n• Analyze causes\n• Generate options\n• Prioritize\n• Recommend"
-    },
-
-    {
-        q: "Imagine performance in {focus} has declined by 20%. How would you investigate?",
-        tip: "Use a hypothesis-driven approach and divide the problem into logical buckets.",
-        outline: "• Confirm metric\n• Establish timeline\n• Segment data\n• Hypotheses\n• Test hypotheses\n• Root cause\n• Action"
-    },
-
-    {
-        q: "A client wants to invest heavily in improving {focus}. How would you determine whether the investment is justified?",
-        tip: "Compare expected benefits against cost, risk and alternatives.",
-        outline: "• Objective\n• Current baseline\n• Benefits\n• Costs\n• Risks\n• Alternatives\n• ROI/recommendation"
-    },
-
-    {
-        q: "How would you prioritize three competing initiatives related to {focus}?",
-        tip: "Create explicit prioritization criteria.",
-        outline: "• Impact\n• Effort\n• Urgency\n• Risk\n• Strategic fit\n• Ranking\n• Recommendation"
-    },
-
-    {
-        q: "A stakeholder disagrees with your recommendation about {focus}. What would you do?",
-        tip: "Separate disagreement from the underlying evidence.",
-        outline: "• Understand concern\n• Restate objective\n• Evidence\n• Alternatives\n• Trade-offs\n• Decision"
-    },
-
-    {
-        q: "How would you identify the root cause of a recurring problem in {focus}?",
-        tip: "Avoid treating symptoms as causes.",
-        outline: "• Define recurring issue\n• Collect evidence\n• Segment cases\n• Root-cause analysis\n• Validate\n• Fix\n• Monitor"
-    },
-
-    {
-        q: "You have limited information but must make a recommendation about {focus}. What would you do?",
-        tip: "Make assumptions explicit and explain how you would validate them.",
-        outline: "• Known facts\n• Unknowns\n• Assumptions\n• Quick analysis\n• Risks\n• Recommendation\n• Validation plan"
-    },
-
-    {
-        q: "How would you present a complex {focus} recommendation to a senior decision-maker?",
-        tip: "Lead with the answer and support it with concise evidence.",
-        outline: "• Executive summary\n• Recommendation\n• Evidence\n• Financial/operational impact\n• Risks\n• Next steps"
-    }
-
-];
-
-
-/* ============================================================
-   MIXED QUESTION TEMPLATES
-   ============================================================ */
-
-const mixedTemplates = [
-
-    ...behavioralTemplates.slice(0, 2),
-
-    ...hrTemplates.slice(0, 2),
-
-    ...caseTemplates.slice(0, 2),
-
-    {
-        q: "What is one important challenge currently affecting {focus}, and how would you approach it?",
-        tip: "Combine industry knowledge with a structured problem-solving approach.",
-        outline: "• Challenge\n• Why it matters\n• Root causes\n• Options\n• Recommendation\n• Risks"
-    },
-
-    {
-        q: "Describe a project or situation where you had to combine technical knowledge with communication skills.",
-        tip: "Show both execution ability and stakeholder awareness.",
-        outline: "• Situation\n• Technical challenge\n• Communication challenge\n• Actions\n• Result\n• Learning"
-    }
-
-];
-
-
-/* ============================================================
-   LEVEL MODIFIERS
-   ============================================================ */
-
-const levelModifiers = {
-
-    "Fresher/Entry-level": {
-        intro:
-            "At an entry level, ",
-        focus:
-            "Show fundamentals, learning ability, practical examples from projects, coursework, internships or training, and willingness to improve."
-    },
-
-    "Mid-level": {
-        intro:
-            "At a mid-level, ",
-        focus:
-            "Show independent ownership, practical judgment, measurable results, collaboration and the ability to handle ambiguity."
-    },
-
-    "Senior": {
-        intro:
-            "At a senior level, ",
-        focus:
-            "Show leadership, strategic thinking, trade-off decisions, mentoring, business impact and ownership of complex outcomes."
+    /* =====================================================
+       GENERIC / OTHER
+    ===================================================== */
+
+    "Generic/Other": {
+
+        "Behavioral": {
+
+            "Fresher/Entry-level": [
+                {
+                    question: "Tell me about yourself.",
+                    tips: "Keep your answer relevant to the job.",
+                    sampleAnswerOutline: "• Education\n• Skills\n• Projects\n• Strengths\n• Career goal"
+                },
+                {
+                    question: "Why should we hire you?",
+                    tips: "Connect your skills to the company's needs.",
+                    sampleAnswerOutline: "• Relevant skills\n• Evidence\n• Learning ability\n• Contribution"
+                },
+                {
+                    question: "What are your strengths?",
+                    tips: "Support each strength with evidence.",
+                    sampleAnswerOutline: "• Strength\n• Example\n• Result"
+                },
+                {
+                    question: "What is your biggest weakness?",
+                    tips: "Choose a real but manageable weakness and show improvement.",
+                    sampleAnswerOutline: "• Weakness\n• Impact\n• Improvement plan\n• Progress"
+                },
+                {
+                    question: "Why do you want this job?",
+                    tips: "Connect role, company and career goals.",
+                    sampleAnswerOutline: "• Role interest\n• Company interest\n• Skills\n• Growth"
+                },
+                {
+                    question: "Tell me about a time you solved a difficult problem.",
+                    tips: "Use STAR.",
+                    sampleAnswerOutline: "• Situation\n• Task\n• Action\n• Result"
+                },
+                {
+                    question: "How do you handle failure?",
+                    tips: "Show accountability and learning.",
+                    sampleAnswerOutline: "• Failure\n• Response\n• Learning\n• Improvement"
+                },
+                {
+                    question: "Where do you see yourself in five years?",
+                    tips: "Focus on realistic professional growth.",
+                    sampleAnswerOutline: "• Skills\n• Responsibility\n• Contribution\n• Learning"
+                },
+                {
+                    question: "How do you prioritize multiple tasks?",
+                    tips: "Explain your prioritization criteria.",
+                    sampleAnswerOutline: "• Urgency\n• Impact\n• Deadlines\n• Planning\n• Communication"
+                },
+                {
+                    question: "Do you have any questions for us?",
+                    tips: "Always prepare thoughtful questions.",
+                    sampleAnswerOutline: "• Team\n• Role\n• Success metrics\n• Learning\n• Company"
+                }
+            ]
+        }
     }
 
 };
 
 
-/* ============================================================
-   CONVERT TEMPLATE INTO QUESTION OBJECT
-   ============================================================ */
+/* =========================================================
+   3. ADD FALLBACK QUESTIONS
+========================================================= */
 
-function createQuestion(template, sector, level) {
-
-    const focus = sectorFocus[sector];
-
-    const modifier = levelModifiers[level];
-
-    let question;
-    let tips;
-    let outline;
-
-    if (Array.isArray(template)) {
-
-        question = template[0];
-        tips = template[1];
-        outline = template[2];
-
-    } else {
-
-        question = template.q;
-        tips = template.tip;
-        outline = template.outline;
-
-    }
-
-
-    question = question.replaceAll(
-        "{focus}",
-        focus
-    );
-
-
-    return {
-
-        question,
-
-        tips:
-            `${modifier.intro}${tips} ${modifier.focus}`,
-
+const fallbackQuestions = [
+    {
+        question: "Tell me about yourself.",
+        tips: "Use a concise present → past → future structure.",
         sampleAnswerOutline:
-            outline
+            "• Current background\n• Relevant skills\n• Projects/experience\n• Career direction"
+    },
+    {
+        question: "Why are you interested in this role?",
+        tips: "Connect the role to your skills and goals.",
+        sampleAnswerOutline:
+            "• Role interest\n• Relevant skills\n• Evidence\n• Career goal"
+    },
+    {
+        question: "Describe a challenging problem you solved.",
+        tips: "Use the STAR framework.",
+        sampleAnswerOutline:
+            "• Situation\n• Task\n• Action\n• Result"
+    },
+    {
+        question: "What is one skill you are currently improving?",
+        tips: "Show self-awareness and a concrete learning plan.",
+        sampleAnswerOutline:
+            "• Skill\n• Current level\n• Learning method\n• Progress"
+    },
+    {
+        question: "How do you handle pressure?",
+        tips: "Explain your process for staying organized.",
+        sampleAnswerOutline:
+            "• Assess\n• Prioritize\n• Execute\n• Communicate"
+    },
+    {
+        question: "Tell me about a time you worked with a team.",
+        tips: "Highlight your contribution.",
+        sampleAnswerOutline:
+            "• Goal\n• Role\n• Collaboration\n• Result"
+    },
+    {
+        question: "What motivates you professionally?",
+        tips: "Connect your motivation to meaningful work.",
+        sampleAnswerOutline:
+            "• Motivation\n• Example\n• Impact\n• Growth"
+    },
+    {
+        question: "How do you respond to feedback?",
+        tips: "Show that you turn feedback into action.",
+        sampleAnswerOutline:
+            "• Listen\n• Clarify\n• Apply\n• Improve"
+    },
+    {
+        question: "What are your biggest strengths?",
+        tips: "Support strengths with evidence.",
+        sampleAnswerOutline:
+            "• Strength\n• Example\n• Result"
+    },
+    {
+        question: "Why should we hire you?",
+        tips: "Summarize your strongest job-relevant value.",
+        sampleAnswerOutline:
+            "• Skills\n• Evidence\n• Learning ability\n• Contribution"
+    }
+];
 
-    };
 
+/* =========================================================
+   4. DOM HELPERS
+========================================================= */
+
+function $(id) {
+    return document.getElementById(id);
 }
 
 
-/* ============================================================
-   GET TECHNICAL TEMPLATES FOR SECTOR
-   ============================================================ */
+function showElement(element) {
+    element.classList.remove("hidden");
+}
 
-function getTechnicalTemplates(sector) {
 
-    if (technicalTemplates[sector]) {
+function hideElement(element) {
+    element.classList.add("hidden");
+}
 
-        return technicalTemplates[sector];
 
+/* =========================================================
+   5. ROUTER
+========================================================= */
+
+function navigateTo(route) {
+
+    const validRoutes = [
+        "home",
+        "pressure",
+        "voice",
+        "progress",
+        "summary",
+        "history",
+        "profile",
+        "login",
+        "signup",
+        "verify-email",
+        "verify-phone",
+        "forgot-password",
+        "reset-password"
+    ];
+
+    if (!validRoutes.includes(route)) {
+        route = "home";
     }
 
-    return genericTechnicalTemplates;
+    appState.currentRoute = route;
 
+    window.location.hash = route;
+
+    renderPage(route);
 }
 
 
-/* ============================================================
-   GENERATE QUESTION BANK
-   ============================================================ */
+function renderPage(route) {
 
-const questionBank = {};
-
-
-/*
-    Supported categories.
-*/
-
-const allSectors = Object.keys(sectorFocus);
-
-const allInterviewTypes = [
-    "Behavioral",
-    "Technical",
-    "HR/General",
-    "Case Study",
-    "Mixed"
-];
-
-const allLevels = [
-    "Fresher/Entry-level",
-    "Mid-level",
-    "Senior"
-];
+    document.querySelectorAll(".page").forEach(page => {
+        page.classList.remove("active-page");
+    });
 
 
-/*
-    Generate the complete bank.
+    const page = $(`${route}Page`);
 
-    Result:
-
-    questionBank[
-        sector
-    ][
-        interviewType
-    ][
-        level
-    ]
-
-    Each combination has exactly 8 questions.
-*/
-
-allSectors.forEach(sector => {
-
-    questionBank[sector] = {};
-
-    allInterviewTypes.forEach(type => {
-
-        questionBank[sector][type] = {};
-
-        allLevels.forEach(level => {
-
-            let templates;
+    if (page) {
+        page.classList.add("active-page");
+    }
 
 
-            switch (type) {
+    document.querySelectorAll(".main-nav a").forEach(link => {
 
-                case "Behavioral":
-                    templates = behavioralTemplates;
-                    break;
+        link.classList.remove("active");
 
-                case "Technical":
-                    templates =
-                        getTechnicalTemplates(sector);
-                    break;
-
-                case "HR/General":
-                    templates = hrTemplates;
-                    break;
-
-                case "Case Study":
-                    templates = caseTemplates;
-                    break;
-
-                case "Mixed":
-                    templates = mixedTemplates;
-                    break;
-
-                default:
-                    templates = mixedTemplates;
-
-            }
+        if (link.getAttribute("href") === `#${route}`) {
+            link.classList.add("active");
+        }
+    });
 
 
-            /*
-                Every template set contains 8 questions.
-            */
+    if (route === "progress") {
+        updateProgressPage();
+    }
 
-            questionBank[sector][type][level] =
-                templates
-                    .slice(0, 8)
-                    .map(template =>
-                        createQuestion(
-                            template,
-                            sector,
-                            level
-                        )
-                    );
 
-        });
+    if (route === "home") {
+        updateHomeStats();
+    }
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+
+/* =========================================================
+   HASH ROUTING
+========================================================= */
+
+function handleRouteChange() {
+
+    let route = window.location.hash.replace("#", "");
+
+    if (!route) {
+        route = "home";
+    }
+
+    const validRoutes = [
+        "home",
+        "pressure",
+        "voice",
+        "progress",
+        "summary",
+        "history",
+        "profile",
+        "login",
+        "signup",
+        "verify-email",
+        "verify-phone",
+        "forgot-password",
+        "reset-password"
+    ];
+
+    if (!validRoutes.includes(route)) {
+        route = "home";
+    }
+
+    appState.currentRoute = route;
+
+    renderPage(route);
+}
+
+
+window.addEventListener(
+    "hashchange",
+    handleRouteChange
+);
+
+
+/* =========================================================
+   6. CLICKABLE ROUTE BUTTONS
+========================================================= */
+
+document.addEventListener("click", event => {
+
+    const routeElement =
+        event.target.closest("[data-route]");
+
+    if (!routeElement) {
+        return;
+    }
+
+    const route =
+        routeElement.dataset.route;
+
+    navigateTo(route);
+});
+
+
+/* =========================================================
+   KEYBOARD SUPPORT FOR FEATURE CARDS
+========================================================= */
+
+document.querySelectorAll(".clickable-card").forEach(card => {
+
+    card.addEventListener("keydown", event => {
+
+        if (
+            event.key === "Enter" ||
+            event.key === " "
+        ) {
+
+            event.preventDefault();
+
+            navigateTo(card.dataset.route);
+        }
 
     });
 
 });
 
 
-/* ============================================================
-   UTILITY FUNCTIONS
-   ============================================================ */
+/* =========================================================
+   7. MOBILE NAVIGATION
+========================================================= */
+
+$("mobileMenuBtn").addEventListener("click", () => {
+
+    const nav = document.querySelector(".main-nav");
+
+    const isOpen =
+        nav.classList.toggle("open");
+
+    $("mobileMenuBtn")
+        .setAttribute(
+            "aria-expanded",
+            isOpen
+        );
+});
 
 
-/*
-    Show one application screen.
-*/
+document.querySelectorAll(".main-nav a")
+    .forEach(link => {
 
-function showScreen(screen) {
+        link.addEventListener("click", () => {
 
-    [
-        setupScreen,
-        practiceScreen,
-        summaryScreen
-    ].forEach(item => {
+            document
+                .querySelector(".main-nav")
+                .classList.remove("open");
 
-        item.classList.remove("active-screen");
+            $("mobileMenuBtn")
+                .setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+
+        });
 
     });
 
-    screen.classList.add("active-screen");
 
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
+/* =========================================================
+   8. GET QUESTIONS
+========================================================= */
 
-}
+function getQuestions() {
 
+    const sector =
+        appState.selectedSector;
 
-/*
-    Display toast notification.
-*/
+    const type =
+        appState.selectedType;
 
-let toastTimeout;
-
-function showToast(message) {
-
-    toast.textContent = message;
-
-    toast.classList.add("show");
-
-    clearTimeout(toastTimeout);
-
-    toastTimeout = setTimeout(() => {
-
-        toast.classList.remove("show");
-
-    }, 2500);
-
-}
+    const level =
+        appState.selectedLevel;
 
 
-/*
-    Format seconds as MM:SS.
-*/
-
-function formatTime(seconds) {
-
-    seconds = Math.max(
-        0,
-        Math.floor(seconds)
-    );
-
-    const minutes =
-        Math.floor(seconds / 60);
-
-    const remainingSeconds =
-        seconds % 60;
-
-    return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
-
-}
+    const sectorData =
+        questionBank[sector];
 
 
-/*
-    Calculate words.
-*/
+    if (
+        sectorData &&
+        sectorData[type] &&
+        sectorData[type][level]
+    ) {
 
-function countWords(text) {
-
-    const trimmed = text.trim();
-
-    if (!trimmed) {
-        return 0;
+        return [
+            ...sectorData[type][level]
+        ];
     }
 
-    return trimmed.split(/\s+/).length;
 
+    /*
+       If the exact combination isn't available,
+       try another question set from the same sector.
+    */
+
+    if (
+        sectorData &&
+        sectorData[type]
+    ) {
+
+        const levels =
+            Object.values(
+                sectorData[type]
+            );
+
+        if (levels.length) {
+            return [...levels[0]];
+        }
+    }
+
+
+    /*
+       Otherwise use generic questions.
+    */
+
+    return [...fallbackQuestions];
 }
 
 
-/*
-    Shuffle array without modifying original.
-*/
+/* =========================================================
+   9. SHUFFLE
+========================================================= */
 
 function shuffle(array) {
 
-    const result = [...array];
+    const copy = [...array];
 
     for (
-        let i = result.length - 1;
+        let i = copy.length - 1;
         i > 0;
         i--
     ) {
@@ -932,143 +841,102 @@ function shuffle(array) {
             );
 
         [
-            result[i],
-            result[j]
+            copy[i],
+            copy[j]
         ] = [
-            result[j],
-            result[i]
+            copy[j],
+            copy[i]
         ];
-
     }
 
-    return result;
+    return copy;
+}
+
+
+/* =========================================================
+   10. START INTERVIEW
+========================================================= */
+
+$("startPracticeBtn")
+    .addEventListener("click", () => {
+
+        navigateTo("pressure");
+
+    });
+
+
+$("beginInterviewBtn")
+    .addEventListener("click", startInterview);
+
+
+async function startInterview() {
+
+    if (authConfigured() && !authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    appState.selectedSector =
+        $("sectorSelect").value;
+
+    appState.selectedType =
+        $("interviewTypeSelect").value;
+
+    appState.selectedLevel =
+        $("levelSelect").value;
+
+
+    const minutes =
+        Number($("timerInput").value);
+
+
+    appState.questionTimeSeconds =
+        Math.max(
+            60,
+            Math.min(
+                minutes * 60,
+                600
+            )
+        );
+
+
+    appState.questions =
+        shuffle(
+            getQuestions()
+        ).slice(0, 10);
+
+
+    appState.currentQuestionIndex = 0;
+
+    appState.sessionAnswers = [];
+
+    appState.currentRating = 0;
+
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = new Date().toISOString();
+    appState.dbSessionMode = "pressure";
+    appState.sessionActive = true;
+
+    const sessionCreated = await createPersistentInterviewSession("pressure");
+    if (!sessionCreated) {
+        resetPracticeState();
+        return;
+    }
+
+
+    hideElement($("pressureSetup"));
+
+    showElement($("pressurePractice"));
+
+
+    loadQuestion();
 
 }
 
 
-/* ============================================================
-   SESSION START
-   ============================================================ */
-
-setupForm.addEventListener(
-    "submit",
-    event => {
-
-        event.preventDefault();
-
-        const sector =
-            sectorSelect.value;
-
-        const interviewType =
-            interviewTypeSelect.value;
-
-        const experience =
-            experienceSelect.value;
-
-        let seconds =
-            Number(timerSetting.value);
-
-
-        if (
-            !sector ||
-            !interviewType ||
-            !experience
-        ) {
-
-            showToast(
-                "Please select all interview preferences."
-            );
-
-            return;
-
-        }
-
-
-        /*
-            Protect against unreasonable timer values.
-        */
-
-        if (
-            Number.isNaN(seconds) ||
-            seconds < 30 ||
-            seconds > 600
-        ) {
-
-            showToast(
-                "Timer must be between 30 and 600 seconds."
-            );
-
-            timerSetting.focus();
-
-            return;
-
-        }
-
-
-        currentSession = {
-
-            sector,
-
-            interviewType,
-
-            experience,
-
-            questions:
-                shuffle(
-                    questionBank[
-                        sector
-                    ][
-                        interviewType
-                    ][
-                        experience
-                    ]
-                ),
-
-            currentIndex: 0,
-
-            timerSeconds: seconds,
-
-            questionStartTime: null,
-
-            timerInterval: null,
-
-            confidence: null,
-
-            randomMode: false
-
-        };
-
-
-        sessionAnswers = [];
-
-        questionSavedForCurrentIndex = false;
-
-
-        /*
-            Update practice header.
-        */
-
-        currentSector.textContent =
-            sector;
-
-        currentInterviewType.textContent =
-            interviewType;
-
-        currentExperience.textContent =
-            experience;
-
-
-        showScreen(practiceScreen);
-
-        loadQuestion();
-
-    }
-);
-
-
-/* ============================================================
-   LOAD QUESTION
-   ============================================================ */
+/* =========================================================
+   11. LOAD QUESTION
+========================================================= */
 
 function loadQuestion() {
 
@@ -1076,797 +944,903 @@ function loadQuestion() {
 
 
     const index =
-        currentSession.currentIndex;
+        appState.currentQuestionIndex;
 
     const question =
-        currentSession.questions[index];
+        appState.questions[index];
 
 
     if (!question) {
-
         finishSession();
-
         return;
-
     }
 
 
-    questionSavedForCurrentIndex = false;
-
-
-    /*
-        Reset UI.
-    */
-
-    answerText.value = "";
-
-    answerStatus.textContent =
-        "Not submitted";
-
-    answerStatus.classList.remove("saved");
-
-
-    confidenceButtons.forEach(button => {
-
-        button.classList.remove("selected");
-
-    });
-
-
-    currentSession.confidence = null;
-
-    confidenceLabel.textContent =
-        "Select a confidence rating";
-
-
-    tipsPanel.hidden = true;
-
-    showTipsButton.textContent =
-        "💡 Show Tips";
-
-    showTipsButton.setAttribute(
-        "aria-expanded",
-        "false"
-    );
-
-
-    /*
-        Populate question.
-    */
-
-    questionText.textContent =
+    $("questionText").textContent =
         question.question;
 
-    questionCategory.textContent =
-        currentSession.interviewType;
 
-    questionLevel.textContent =
-        currentSession.experience;
+    $("questionCategory").textContent =
+        `${appState.selectedType.toUpperCase()} • ${appState.selectedLevel.toUpperCase()}`;
 
 
-    tipText.textContent =
-        question.tips;
-
-    outlineText.textContent =
-        question.sampleAnswerOutline;
+    $("questionProgress").textContent =
+        `Question ${index + 1} of ${appState.questions.length}`;
 
 
-    /*
-        Progress.
-    */
-
-    const total =
-        currentSession.questions.length;
-
-    const currentNumber =
-        index + 1;
-
-    progressText.textContent =
-        `Question ${currentNumber} of ${total}`;
+    $("questionProgressBar").style.width =
+        `${((index + 1) / appState.questions.length) * 100}%`;
 
 
-    progressBar.style.width =
-        `${(currentNumber / total) * 100}%`;
+    $("answerInput").value = "";
 
 
-    previousButton.disabled =
-        index === 0;
-
-
-    if (index === total - 1) {
-
-        nextButton.textContent =
-            "Finish Session ✓";
-
-    } else {
-
-        nextButton.textContent =
-            "Next Question →";
-
-    }
-
-
-    /*
-        Reset timer.
-    */
-
-    currentSession.questionStartTime =
-        Date.now();
-
-    currentSession.remaining =
-        currentSession.timerSeconds;
-
-
-    timerElement.textContent =
-        formatTime(
-            currentSession.timerSeconds
-        );
-
-
-    timerContainer.classList.remove(
-        "warning"
-    );
-
-
-    wordCount.textContent =
+    $("wordCount").textContent =
         "0 words";
 
 
-    /*
-        Start timer.
-    */
+    hideElement($("tipsPanel"));
+
+    hideElement($("evaluationPanel"));
+
+
+    $("showTipsBtn").textContent =
+        "Show Tips";
+
+
+    resetRating();
+
+
+    $("tipText").textContent =
+        question.tips;
+
+
+    $("outlineText").textContent =
+        question.sampleAnswerOutline;
+
+
+    appState.questionStartedAt =
+        Date.now();
+
 
     startTimer();
-
-
-    /*
-        Focus question for keyboard/screen-reader users.
-    */
-
-    setTimeout(() => {
-
-        questionText.focus();
-
-    }, 50);
 
 }
 
 
-/* ============================================================
-   TIMER
-   ============================================================ */
+/* =========================================================
+   12. TIMER
+========================================================= */
 
 function startTimer() {
 
     stopTimer();
 
 
-    currentSession.remaining =
-        currentSession.timerSeconds;
+    appState.remainingSeconds =
+        appState.questionTimeSeconds;
 
 
-    timerElement.textContent =
-        formatTime(
-            currentSession.remaining
-        );
+    updateTimerDisplay();
 
 
-    currentSession.timerInterval =
+    appState.timerStartedAt =
+        Date.now();
+
+
+    appState.timerInterval =
         setInterval(() => {
 
-            currentSession.remaining--;
+            appState.remainingSeconds--;
 
-            timerElement.textContent =
-                formatTime(
-                    currentSession.remaining
-                );
-
-
-            /*
-                Last 15 seconds = visual warning.
-            */
-
-            if (
-                currentSession.remaining <= 15
-            ) {
-
-                timerContainer.classList.add(
-                    "warning"
-                );
-
-            }
+            updateTimerDisplay();
 
 
             if (
-                currentSession.remaining <= 0
+                appState.remainingSeconds <= 0
             ) {
 
                 stopTimer();
 
-                showToast(
-                    "Time's up! Rate your answer."
-                );
-
-                answerStatus.textContent =
-                    "Time expired";
-
-                answerStatus.classList.add(
-                    "saved"
-                );
-
-
-                /*
-                    Automatically save the answer
-                    if it has not already been saved.
-                */
-
-                saveCurrentAnswer();
-
-
-                /*
-                    Do not automatically jump away.
-                    The user can still rate the answer.
-                */
+                timeExpired();
 
             }
 
         }, 1000);
-
 }
 
-
-/*
-    Stop timer.
-*/
 
 function stopTimer() {
 
-    if (
-        currentSession.timerInterval
-    ) {
+    if (appState.timerInterval) {
 
         clearInterval(
-            currentSession.timerInterval
+            appState.timerInterval
         );
 
-        currentSession.timerInterval =
-            null;
+        appState.timerInterval = null;
+    }
+}
+
+
+function updateTimerDisplay() {
+
+    const seconds =
+        Math.max(
+            0,
+            appState.remainingSeconds
+        );
+
+
+    const minutes =
+        Math.floor(
+            seconds / 60
+        );
+
+
+    const remaining =
+        seconds % 60;
+
+
+    $("timerDisplay").textContent =
+        `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
+
+
+    if (seconds <= 15) {
+
+        $("timerDisplay")
+            .classList.add("low-time");
+
+    } else {
+
+        $("timerDisplay")
+            .classList.remove("low-time");
 
     }
 
 }
 
 
-/* ============================================================
-   SAVE ANSWER
-   ============================================================ */
+function timeExpired() {
 
-function saveCurrentAnswer() {
+    saveCurrentAnswer();
 
-    if (
-        questionSavedForCurrentIndex
-    ) {
+    showElement(
+        $("evaluationPanel")
+    );
 
-        return;
+    $("ratingText").textContent =
+        "Time is up. Rate your answer before continuing.";
 
-    }
-
-
-    const answer =
-        answerText.value.trim();
+}
 
 
-    const elapsed =
-        Math.min(
-            currentSession.timerSeconds,
-            Math.max(
-                0,
-                Math.floor(
-                    (
-                        Date.now() -
-                        currentSession.questionStartTime
-                    ) / 1000
-                )
-            )
-        );
+/* =========================================================
+   13. ANSWER WORD COUNT
+========================================================= */
+
+$("answerInput")
+    .addEventListener("input", () => {
+
+        const text =
+            $("answerInput").value.trim();
 
 
-    const question =
-        currentSession.questions[
-            currentSession.currentIndex
-        ];
+        const words =
+            text
+                ? text.split(/\s+/).length
+                : 0;
 
 
-    /*
-        We save even an empty answer so that the summary
-        accurately represents the question encountered.
-    */
-
-    sessionAnswers.push({
-
-        question:
-            question.question,
-
-        answer:
-            answer || "(No answer provided)",
-
-        rating:
-            currentSession.confidence || 0,
-
-        timestamp:
-            new Date(),
-
-        timeTaken:
-            elapsed,
-
-        sector:
-            currentSession.sector,
-
-        interviewType:
-            currentSession.interviewType,
-
-        experience:
-            currentSession.experience
+        $("wordCount").textContent =
+            `${words} ${words === 1 ? "word" : "words"}`;
 
     });
 
 
-    questionSavedForCurrentIndex = true;
+/* =========================================================
+   14. SHOW TIPS
+========================================================= */
+
+$("showTipsBtn")
+    .addEventListener("click", () => {
+
+        const panel =
+            $("tipsPanel");
+
+        const hidden =
+            panel.classList.contains("hidden");
 
 
-    answerStatus.textContent =
-        "Answer saved ✓";
+        if (hidden) {
 
-    answerStatus.classList.add(
-        "saved"
-    );
+            showElement(panel);
 
-}
+            $("showTipsBtn")
+                .textContent =
+                "Hide Tips";
 
+        } else {
 
-/* ============================================================
-   NEXT QUESTION
-   ============================================================ */
+            hideElement(panel);
 
-nextButton.addEventListener(
-    "click",
-    () => {
-
-        /*
-            If confidence has not been selected,
-            ask the user before moving on.
-        */
-
-        if (
-            currentSession.confidence === null
-        ) {
-
-            showToast(
-                "Please rate your confidence before continuing."
-            );
-
-            evaluationCard.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
-
-            return;
+            $("showTipsBtn")
+                .textContent =
+                "Show Tips";
 
         }
 
-
-        saveCurrentAnswer();
-
-        stopTimer();
+    });
 
 
-        const lastQuestion =
-            currentSession.currentIndex >=
-            currentSession.questions.length - 1;
+/* =========================================================
+   15. RATING
+========================================================= */
 
+document
+    .querySelectorAll(
+        "#ratingStars button"
+    )
+    .forEach(button => {
 
-        if (lastQuestion) {
+        button.addEventListener(
+            "click",
+            () => {
 
-            finishSession();
+                const rating =
+                    Number(
+                        button.dataset.rating
+                    );
 
-            return;
+                setRating(rating);
 
-        }
-
-
-        /*
-            Smooth question transition.
-        */
-
-        questionCard.classList.add(
-            "transitioning"
+            }
         );
 
-
-        setTimeout(() => {
-
-            currentSession.currentIndex++;
-
-            questionCard.classList.remove(
-                "transitioning"
-            );
-
-            loadQuestion();
-
-        }, 180);
-
-    }
-);
+    });
 
 
-/* ============================================================
-   PREVIOUS QUESTION
-   ============================================================ */
+function setRating(rating) {
 
-previousButton.addEventListener(
-    "click",
-    () => {
-
-        if (
-            currentSession.currentIndex <= 0
-        ) {
-
-            return;
-
-        }
+    appState.currentRating =
+        rating;
 
 
-        /*
-            Save current answer before navigating.
-        */
+    document
+        .querySelectorAll(
+            "#ratingStars button"
+        )
+        .forEach(button => {
 
-        if (
-            currentSession.confidence !== null
-        ) {
-
-            saveCurrentAnswer();
-
-        }
-
-
-        stopTimer();
-
-
-        currentSession.currentIndex--;
-
-
-        /*
-            Note:
-            We intentionally reload the question as a fresh
-            question state. This keeps the session implementation
-            simple and predictable.
-        */
-
-        loadQuestion();
-
-    }
-);
-
-
-/* ============================================================
-   CONFIDENCE RATING
-   ============================================================ */
-
-confidenceButtons.forEach(button => {
-
-    button.addEventListener(
-        "click",
-        () => {
-
-            const rating =
+            const buttonRating =
                 Number(
                     button.dataset.rating
                 );
 
 
-            currentSession.confidence =
-                rating;
-
-
-            confidenceButtons.forEach(
-                item => {
-
-                    const itemRating =
-                        Number(
-                            item.dataset.rating
-                        );
-
-                    item.classList.toggle(
-                        "selected",
-                        itemRating <= rating
-                    );
-
-                }
+            button.classList.toggle(
+                "selected",
+                buttonRating <= rating
             );
 
-
-            const labels = {
-
-                1: "Not confident yet",
-
-                2: "Slightly confident",
-
-                3: "Moderately confident",
-
-                4: "Very confident",
-
-                5: "Extremely confident"
-
-            };
+        });
 
 
-            confidenceLabel.textContent =
-                labels[rating];
+    const descriptions = {
+        1: "Very low confidence",
+        2: "Low confidence",
+        3: "Moderate confidence",
+        4: "Good confidence",
+        5: "Very high confidence"
+    };
 
 
-            /*
-                If time expired, we can now save
-                the answer with the rating.
-            */
+    $("ratingText").textContent =
+        descriptions[rating];
 
-            if (
-                currentSession.remaining <= 0
-            ) {
-
-                saveCurrentAnswer();
-
-            }
-
-        }
-    );
-
-});
+}
 
 
-/* ============================================================
-   WORD COUNT
-   ============================================================ */
+function resetRating() {
 
-answerText.addEventListener(
-    "input",
-    () => {
+    appState.currentRating = 0;
 
-        const words =
-            countWords(
-                answerText.value
+    document
+        .querySelectorAll(
+            "#ratingStars button"
+        )
+        .forEach(button => {
+
+            button.classList.remove(
+                "selected"
             );
 
+        });
 
-        wordCount.textContent =
-            `${words} ${words === 1 ? "word" : "words"}`;
 
+    $("ratingText").textContent =
+        "Select a rating";
+
+}
+
+
+/* =========================================================
+   16. SAVE CURRENT ANSWER
+========================================================= */
+
+function saveCurrentAnswer() {
+
+    const question =
+        appState.questions[
+            appState.currentQuestionIndex
+        ];
+
+
+    if (!question) {
+        return;
     }
-);
 
 
-/* ============================================================
-   SHOW / HIDE TIPS
-   ============================================================ */
-
-showTipsButton.addEventListener(
-    "click",
-    () => {
-
-        const currentlyHidden =
-            tipsPanel.hidden;
+    const answer =
+        $("answerInput").value.trim();
 
 
-        tipsPanel.hidden =
-            !currentlyHidden;
+    const existingIndex =
+        appState.sessionAnswers
+            .findIndex(
+                item =>
+                    item.questionIndex ===
+                    appState.currentQuestionIndex
+            );
 
 
-        showTipsButton.setAttribute(
-            "aria-expanded",
-            String(currentlyHidden)
+    const elapsed =
+        Math.max(
+            0,
+            Math.round(
+                (Date.now() -
+                    appState.questionStartedAt) /
+                1000
+            )
         );
 
 
-        showTipsButton.textContent =
-            currentlyHidden
-                ? "🙈 Hide Tips"
-                : "💡 Show Tips";
+    const record = {
+
+        questionIndex:
+            appState.currentQuestionIndex,
+
+        question:
+            question.question,
+
+        answer:
+            answer,
+
+        rating:
+            appState.currentRating,
+
+        timestamp:
+            new Date().toISOString(),
+
+        timeTaken:
+            Math.min(
+                elapsed,
+                appState.questionTimeSeconds
+            ),
+
+        sector:
+            appState.selectedSector,
+
+        type:
+            appState.selectedType,
+
+        level:
+            appState.selectedLevel
+
+    };
+
+
+    if (existingIndex >= 0) {
+
+        appState.sessionAnswers[
+            existingIndex
+        ] = record;
+
+    } else {
+
+        appState.sessionAnswers.push(
+            record
+        );
 
     }
-);
 
 
-/* ============================================================
-   FINISH SESSION
-   ============================================================ */
+    /*
+       Keep a global in-memory record too.
+       This resets when the browser page reloads.
+    */
 
-finishSessionButton.addEventListener(
-    "click",
-    () => {
-
-        if (
-            sessionAnswers.length === 0 &&
-            answerText.value.trim() === ""
-        ) {
-
-            finishSession();
-
-            return;
-
-        }
+    const globalExistingIndex =
+        appState.allAnswers.findIndex(
+            item =>
+                item.question ===
+                record.question &&
+                item.timestamp ===
+                record.timestamp
+        );
 
 
-        /*
-            Ask for rating if the current answer
-            has not been evaluated.
-        */
+    if (globalExistingIndex === -1) {
 
-        if (
-            currentSession.confidence === null
-        ) {
+        appState.allAnswers.push(
+            record
+        );
 
-            showToast(
-                "Rate your current answer before finishing."
-            );
+    }
 
-            evaluationCard.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
-
-            return;
-
-        }
+}
 
 
-        saveCurrentAnswer();
+/* =========================================================
+   17. NEXT QUESTION
+========================================================= */
+
+$("nextQuestionBtn")
+    .addEventListener(
+        "click",
+        nextQuestion
+    );
+
+
+function nextQuestion() {
+
+    if (
+        appState.currentRating === 0 &&
+        $("answerInput").value.trim()
+    ) {
+
+        showElement(
+            $("evaluationPanel")
+        );
+
+        $("ratingText").textContent =
+            "Please select a confidence rating before continuing.";
+
+        return;
+    }
+
+
+    saveCurrentAnswer();
+
+
+    if (
+        appState.currentQuestionIndex <
+        appState.questions.length - 1
+    ) {
+
+        appState.currentQuestionIndex++;
+
+        loadQuestion();
+
+    } else {
 
         finishSession();
 
     }
-);
-
-
-/* ============================================================
-   BUILD SUMMARY
-   ============================================================ */
-
-function finishSession() {
-
-    stopTimer();
-
-    showScreen(summaryScreen);
-
-    buildSummary();
 
 }
 
 
-/*
-    Calculate and display summary metrics.
-*/
+/* =========================================================
+   18. PREVIOUS QUESTION
+========================================================= */
 
-function buildSummary() {
+$("previousQuestionBtn")
+    .addEventListener(
+        "click",
+        previousQuestion
+    );
+
+
+function previousQuestion() {
+
+    saveCurrentAnswer();
+
+
+    if (
+        appState.currentQuestionIndex > 0
+    ) {
+
+        appState.currentQuestionIndex--;
+
+        loadQuestion();
+
+    }
+
+}
+
+
+/* =========================================================
+   19. FINISH SESSION
+========================================================= */
+
+$("finishSessionBtn")
+    .addEventListener(
+        "click",
+        finishSession
+    );
+
+
+async function finishSession() {
+
+    if (!appState.sessionActive && !appState.sessionAnswers.length) {
+        navigateTo("summary");
+        return;
+    }
+
+    saveCurrentAnswer();
+    stopTimer();
+
+    // Render the completed session before clearing transient practice state.
+    updateSummary();
+
+    await persistCurrentAnswerToDatabase();
+    await completePersistentInterviewSession();
+
+    appState.sessionActive = false;
+    resetPracticeState();
+    appState.allAnswers = [];
+
+    navigateTo("summary");
+
+}
+
+
+/* =========================================================
+   20. SUMMARY
+========================================================= */
+
+function updateSummary() {
+
+    const answers =
+        appState.sessionAnswers;
+
 
     const attempted =
-        sessionAnswers.length;
+        answers.filter(
+            item =>
+                item.answer.length > 0
+        );
 
 
-    attemptedCount.textContent =
-        attempted;
+    $("summaryAttempts")
+        .textContent =
+        attempted.length;
 
 
-    if (attempted === 0) {
+    const rated =
+        answers.filter(
+            item =>
+                item.rating > 0
+        );
 
-        averageConfidence.textContent =
-            "0 / 5";
 
-        averageTime.textContent =
-            "0 sec";
+    if (rated.length) {
 
-        confidenceChart.innerHTML =
-            `<p style="color: var(--text-muted);">
-                No answers were recorded.
-            </p>`;
+        const average =
+            rated.reduce(
+                (sum, item) =>
+                    sum + item.rating,
+                0
+            ) / rated.length;
 
-        reviewAnswers.innerHTML =
-            `<p style="color: var(--text-muted);">
-                No answers to review.
-            </p>`;
 
-        return;
+        $("summaryConfidence")
+            .textContent =
+            `${average.toFixed(1)} / 5`;
+
+    } else {
+
+        $("summaryConfidence")
+            .textContent =
+            "--";
 
     }
 
 
-    const ratings =
-        sessionAnswers.map(
-            item => item.rating
-        );
+    if (attempted.length) {
+
+        const averageTime =
+            attempted.reduce(
+                (sum, item) =>
+                    sum + item.timeTaken,
+                0
+            ) / attempted.length;
 
 
-    const totalRating =
-        ratings.reduce(
-            (sum, rating) =>
-                sum + rating,
-            0
-        );
+        $("summaryTime")
+            .textContent =
+            formatSeconds(
+                averageTime
+            );
+
+    } else {
+
+        $("summaryTime")
+            .textContent =
+            "--";
+
+    }
 
 
-    const average =
-        totalRating /
-        attempted;
+    renderChart(
+        $("summaryChart"),
+        answers
+    );
 
 
-    const totalTime =
-        sessionAnswers.reduce(
-            (sum, item) =>
-                sum + item.timeTaken,
-            0
-        );
-
-
-    const avgTime =
-        totalTime /
-        attempted;
-
-
-    averageConfidence.textContent =
-        `${average.toFixed(1)} / 5`;
-
-
-    averageTime.textContent =
-        `${Math.round(avgTime)} sec`;
-
-
-    buildConfidenceChart();
-
-    buildReviewList();
+    renderReviewAnswers(
+        $("summaryReviewAnswers"),
+        answers
+    );
 
 }
 
 
-/* ============================================================
-   CONFIDENCE CHART
-   ============================================================ */
+/* =========================================================
+   21. PROGRESS PAGE
+========================================================= */
 
-function buildConfidenceChart() {
+function updateProgressPage() {
 
-    confidenceChart.innerHTML = "";
+    const answers =
+        appState.allAnswers;
 
 
-    sessionAnswers.forEach(
+    const attempted =
+        answers.filter(
+            item =>
+                item.answer.length > 0
+        );
+
+
+    $("progressAttempts")
+        .textContent =
+        attempted.length;
+
+
+    const rated =
+        attempted.filter(
+            item =>
+                item.rating > 0
+        );
+
+
+    if (rated.length) {
+
+        const average =
+            rated.reduce(
+                (sum, item) =>
+                    sum + item.rating,
+                0
+            ) / rated.length;
+
+
+        $("progressAverage")
+            .textContent =
+            `${average.toFixed(1)} / 5`;
+
+
+        $("progressBest")
+            .textContent =
+            `${Math.max(
+                ...rated.map(
+                    item =>
+                        item.rating
+                )
+            )} / 5`;
+
+    } else {
+
+        $("progressAverage")
+            .textContent =
+            "--";
+
+        $("progressBest")
+            .textContent =
+            "--";
+
+    }
+
+
+    if (attempted.length) {
+
+        const averageTime =
+            attempted.reduce(
+                (sum, item) =>
+                    sum + item.timeTaken,
+                0
+            ) / attempted.length;
+
+
+        $("progressTime")
+            .textContent =
+            formatSeconds(
+                averageTime
+            );
+
+    } else {
+
+        $("progressTime")
+            .textContent =
+            "--";
+
+    }
+
+
+    renderChart(
+        $("progressChart"),
+        answers
+    );
+
+
+    renderReviewAnswers(
+        $("reviewAnswers"),
+        answers
+    );
+
+}
+
+
+/* =========================================================
+   22. HOME STATS
+========================================================= */
+
+function updateHomeStats() {
+
+    const answers =
+        appState.allAnswers;
+
+
+    const attempted =
+        answers.filter(
+            item =>
+                item.answer.length > 0
+        );
+
+
+    $("totalAttemptsHome")
+        .textContent =
+        attempted.length;
+
+
+    const rated =
+        attempted.filter(
+            item =>
+                item.rating > 0
+        );
+
+
+    if (rated.length) {
+
+        const average =
+            rated.reduce(
+                (sum, item) =>
+                    sum + item.rating,
+                0
+            ) / rated.length;
+
+
+        $("averageConfidenceHome")
+            .textContent =
+            `${average.toFixed(1)} / 5`;
+
+
+        $("bestConfidenceHome")
+            .textContent =
+            `${Math.max(
+                ...rated.map(
+                    item =>
+                        item.rating
+                )
+            )} / 5`;
+
+
+        const readiness =
+            Math.round(
+                (average / 5) * 100
+            );
+
+
+        $("homeReadiness")
+            .textContent =
+            readiness;
+
+
+        $("homeProgressBar")
+            .style.width =
+            `${readiness}%`;
+
+    } else {
+
+        $("averageConfidenceHome")
+            .textContent =
+            "--";
+
+        $("bestConfidenceHome")
+            .textContent =
+            "--";
+
+        $("homeReadiness")
+            .textContent =
+            "--";
+
+        $("homeProgressBar")
+            .style.width =
+            "0%";
+
+    }
+
+}
+
+
+/* =========================================================
+   23. BAR CHART
+========================================================= */
+
+function renderChart(
+    container,
+    answers
+) {
+
+    container.innerHTML = "";
+
+
+    const rated =
+        answers.filter(
+            item =>
+                item.rating > 0
+        );
+
+
+    if (!rated.length) {
+
+        container.innerHTML = `
+            <div class="empty-chart">
+                Complete some questions and rate your answers
+                to see your confidence chart.
+            </div>
+        `;
+
+        return;
+    }
+
+
+    rated.forEach(
         (item, index) => {
 
-            const column =
+            const itemContainer =
                 document.createElement(
                     "div"
                 );
 
-            column.className =
-                "chart-column";
+
+            itemContainer.className =
+                "bar-item";
 
 
-            const value =
+            const score =
                 document.createElement(
                     "span"
                 );
 
-            value.className =
-                "chart-value";
 
-            value.textContent =
-                item.rating
-                    ? item.rating
-                    : "—";
+            score.className =
+                "bar-score";
 
 
-            const barContainer =
-                document.createElement(
-                    "div"
-                );
-
-            barContainer.className =
-                "chart-bar-container";
+            score.textContent =
+                `${item.rating}/5`;
 
 
             const bar =
@@ -1874,22 +1848,13 @@ function buildConfidenceChart() {
                     "div"
                 );
 
+
             bar.className =
-                "chart-bar";
+                "bar";
 
-
-            const rating =
-                item.rating || 0;
-
-
-            /*
-                Rating 5 = 100%
-                Rating 4 = 80%
-                etc.
-            */
 
             bar.style.height =
-                `${rating * 20}%`;
+                `${item.rating * 20}%`;
 
 
             const label =
@@ -1897,25 +1862,30 @@ function buildConfidenceChart() {
                     "span"
                 );
 
+
             label.className =
-                "chart-label";
+                "bar-label";
+
 
             label.textContent =
                 `Q${index + 1}`;
 
 
-            barContainer.appendChild(bar);
-
-            column.appendChild(value);
-
-            column.appendChild(
-                barContainer
+            itemContainer.appendChild(
+                score
             );
 
-            column.appendChild(label);
+            itemContainer.appendChild(
+                bar
+            );
 
-            confidenceChart.appendChild(
-                column
+            itemContainer.appendChild(
+                label
+            );
+
+
+            container.appendChild(
+                itemContainer
             );
 
         }
@@ -1924,105 +1894,98 @@ function buildConfidenceChart() {
 }
 
 
-/* ============================================================
-   REVIEW ANSWERS
-   ============================================================ */
+/* =========================================================
+   24. REVIEW ANSWERS
+========================================================= */
 
-function buildReviewList() {
+function renderReviewAnswers(
+    container,
+    answers
+) {
 
-    reviewAnswers.innerHTML = "";
+    container.innerHTML = "";
 
 
-    sessionAnswers.forEach(
+    if (!answers.length) {
+
+        container.innerHTML = `
+            <p class="empty-review">
+                No answers have been recorded yet.
+            </p>
+        `;
+
+        return;
+    }
+
+
+    answers.forEach(
         (item, index) => {
 
-            const wrapper =
+            const review =
                 document.createElement(
                     "article"
                 );
 
-            wrapper.className =
+
+            review.className =
                 "review-item";
 
 
             const question =
                 document.createElement(
-                    "div"
+                    "h3"
                 );
 
-            question.className =
-                "review-question";
 
             question.textContent =
-                `Q${index + 1}. ${item.question}`;
+                `Question ${index + 1}: ${item.question}`;
 
 
             const answer =
                 document.createElement(
-                    "div"
+                    "p"
                 );
 
-            answer.className =
-                "review-answer";
 
             answer.textContent =
-                item.answer;
+                item.answer ||
+                "No answer provided.";
 
 
-            const meta =
-                document.createElement(
-                    "div"
+            review.appendChild(
+                question
+            );
+
+            review.appendChild(
+                answer
+            );
+
+
+            if (item.rating > 0) {
+
+                const rating =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                rating.className =
+                    "review-rating";
+
+
+                rating.textContent =
+                    `Confidence: ${"★".repeat(item.rating)}${"☆".repeat(5 - item.rating)}`;
+
+
+                review.appendChild(
+                    rating
                 );
 
-            meta.className =
-                "review-meta";
+            }
 
 
-            const rating =
-                document.createElement(
-                    "span"
-                );
-
-            rating.textContent =
-                item.rating
-                    ? `Confidence: ${item.rating}/5`
-                    : "Confidence: Not rated";
-
-
-            const time =
-                document.createElement(
-                    "span"
-                );
-
-            time.textContent =
-                `Time: ${item.timeTaken}s`;
-
-
-            const timestamp =
-                document.createElement(
-                    "span"
-                );
-
-            timestamp.textContent =
-                item.timestamp.toLocaleTimeString();
-
-
-            meta.appendChild(rating);
-
-            meta.appendChild(time);
-
-            meta.appendChild(timestamp);
-
-
-            wrapper.appendChild(question);
-
-            wrapper.appendChild(answer);
-
-            wrapper.appendChild(meta);
-
-
-            reviewAnswers.appendChild(
-                wrapper
+            container.appendChild(
+                review
             );
 
         }
@@ -2031,91 +1994,147 @@ function buildReviewList() {
 }
 
 
-/* ============================================================
-   REVIEW TOGGLE
-   ============================================================ */
+/* =========================================================
+   25. REVIEW TOGGLES
+========================================================= */
 
-reviewAnswersButton.addEventListener(
-    "click",
-    () => {
+$("reviewToggle")
+    .addEventListener(
+        "click",
+        () => {
 
-        const currentlyHidden =
-            reviewAnswers.hidden;
+            toggleReview(
+                $("reviewAnswers"),
+                $("reviewToggle")
+            );
+
+        }
+    );
 
 
-        reviewAnswers.hidden =
-            !currentlyHidden;
+$("summaryReviewToggle")
+    .addEventListener(
+        "click",
+        () => {
+
+            toggleReview(
+                $("summaryReviewAnswers"),
+                $("summaryReviewToggle")
+            );
+
+        }
+    );
 
 
-        reviewAnswersButton.setAttribute(
-            "aria-expanded",
-            String(currentlyHidden)
+function toggleReview(
+    content,
+    button
+) {
+
+    const isHidden =
+        content.classList.contains(
+            "hidden"
         );
 
 
-        reviewArrow.textContent =
-            currentlyHidden
-                ? "▲"
-                : "▼";
+    if (isHidden) {
+
+        showElement(content);
+
+        button.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+
+        button.lastElementChild
+            .textContent =
+            "−";
+
+    } else {
+
+        hideElement(content);
+
+        button.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+        button.lastElementChild
+            .textContent =
+            "＋";
 
     }
-);
+
+}
 
 
-/* ============================================================
-   NEW SESSION
-   ============================================================ */
+/* =========================================================
+   26. FORMAT TIME
+========================================================= */
 
-newSessionButton.addEventListener(
-    "click",
-    () => {
+function formatSeconds(seconds) {
 
-        stopTimer();
+    const rounded =
+        Math.round(seconds);
 
-        sessionAnswers = [];
 
-        showScreen(setupScreen);
+    if (rounded < 60) {
 
-        setupForm.reset();
-
-        timerSetting.value = 120;
+        return `${rounded}s`;
 
     }
-);
 
 
-/* ============================================================
-   RANDOM QUESTION MODE
-   ============================================================ */
+    const minutes =
+        Math.floor(
+            rounded / 60
+        );
 
-/*
-    Build a flattened collection containing every question
-    from every sector, interview type and level.
-*/
 
-function getAllQuestions() {
+    const remaining =
+        rounded % 60;
+
+
+    return `${minutes}m ${remaining}s`;
+
+}
+
+
+/* =========================================================
+   27. RANDOM QUESTION MODE
+========================================================= */
+
+$("randomQuestionBtn")
+    .addEventListener(
+        "click",
+        startRandomQuestion
+    );
+
+
+async function startRandomQuestion() {
+
+    if (authConfigured() && !authState.user) {
+        routeTo("login");
+        return;
+    }
 
     const allQuestions = [];
 
 
-    allSectors.forEach(
-        sector => {
+    Object.entries(
+        questionBank
+    ).forEach(
+        ([sector, sectorData]) => {
 
-            allInterviewTypes.forEach(
-                type => {
+            Object.entries(
+                sectorData
+            ).forEach(
+                ([type, typeData]) => {
 
-                    allLevels.forEach(
-                        level => {
-
-                            const questions =
-                                questionBank[
-                                    sector
-                                ][
-                                    type
-                                ][
-                                    level
-                                ];
-
+                    Object.entries(
+                        typeData
+                    ).forEach(
+                        ([level, questions]) => {
 
                             questions.forEach(
                                 question => {
@@ -2126,11 +2145,9 @@ function getAllQuestions() {
 
                                         sector,
 
-                                        interviewType:
-                                            type,
+                                        type,
 
-                                        experience:
-                                            level
+                                        level
 
                                     });
 
@@ -2147,27 +2164,7 @@ function getAllQuestions() {
     );
 
 
-    return allQuestions;
-
-}
-
-
-/*
-    Start random question practice.
-
-    A random question can come from any industry.
-*/
-
-function startRandomPractice() {
-
-    stopTimer();
-
-
-    const allQuestions =
-        getAllQuestions();
-
-
-    const randomQuestion =
+    const random =
         allQuestions[
             Math.floor(
                 Math.random() *
@@ -2176,205 +2173,173 @@ function startRandomPractice() {
         ];
 
 
-    currentSession = {
-
-        sector:
-            randomQuestion.sector,
-
-        interviewType:
-            randomQuestion.interviewType,
-
-        experience:
-            randomQuestion.experience,
-
-        questions: [
-            randomQuestion
-        ],
-
-        currentIndex: 0,
-
-        timerSeconds:
-            Number(timerSetting.value) || 120,
-
-        timerInterval: null,
-
-        questionStartTime: null,
-
-        confidence: null,
-
-        randomMode: true
-
-    };
+    if (!random) {
+        return;
+    }
 
 
-    sessionAnswers = [];
+    appState.selectedSector =
+        random.sector;
 
-    questionSavedForCurrentIndex = false;
+    appState.selectedType =
+        random.type;
 
-
-    currentSector.textContent =
-        randomQuestion.sector;
-
-    currentInterviewType.textContent =
-        randomQuestion.interviewType;
-
-    currentExperience.textContent =
-        randomQuestion.experience;
+    appState.selectedLevel =
+        random.level;
 
 
-    showScreen(practiceScreen);
+    appState.questions = [
+        random
+    ];
+
+
+    appState.currentQuestionIndex = 0;
+
+    appState.sessionAnswers = [];
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = new Date().toISOString();
+    appState.dbSessionMode = "random";
+    appState.sessionActive = true;
+
+    const sessionCreated = await createPersistentInterviewSession("random");
+    if (!sessionCreated) {
+        resetPracticeState();
+        return;
+    }
+
+
+    $("sectorSelect").value =
+        random.sector;
+
+    $("interviewTypeSelect").value =
+        random.type;
+
+    $("levelSelect").value =
+        random.level;
+
+
+    hideElement(
+        $("pressureSetup")
+    );
+
+    showElement(
+        $("pressurePractice")
+    );
+
+
+    navigateTo("pressure");
 
     loadQuestion();
 
-    showToast(
-        "Random question selected."
-    );
-
 }
 
 
-/*
-    Random button on setup screen.
-*/
+/* =========================================================
+   28. RESTART INTERVIEW
+========================================================= */
 
-randomPracticeButton.addEventListener(
-    "click",
-    startRandomPractice
-);
+$("restartInterviewBtn")
+    .addEventListener(
+        "click",
+        () => {
 
+            navigateTo("pressure");
 
-/*
-    Random button on summary screen.
-*/
+            hideElement(
+                $("pressurePractice")
+            );
 
-randomSummaryButton.addEventListener(
-    "click",
-    startRandomPractice
-);
+            showElement(
+                $("pressureSetup")
+            );
 
-
-/* ============================================================
-   TEXT TO SPEECH
-   ============================================================ */
-
-function speakText(text) {
-
-    /*
-        Check browser support.
-    */
-
-    if (
-        !("speechSynthesis" in window)
-    ) {
-
-        showToast(
-            "Text-to-speech is not supported by this browser."
-        );
-
-        return;
-
-    }
-
-
-    /*
-        Stop anything currently being spoken.
-    */
-
-    window.speechSynthesis.cancel();
-
-
-    const utterance =
-        new SpeechSynthesisUtterance(
-            text
-        );
-
-
-    utterance.rate = 0.9;
-
-    utterance.pitch = 1;
-
-    utterance.volume = 1;
-
-
-    /*
-        Try to use an English voice.
-    */
-
-    const voices =
-        window.speechSynthesis.getVoices();
-
-
-    const preferredVoice =
-        voices.find(
-            voice =>
-                voice.lang.startsWith("en")
-        );
-
-
-    if (preferredVoice) {
-
-        utterance.voice =
-            preferredVoice;
-
-    }
-
-
-    window.speechSynthesis.speak(
-        utterance
-    );
-
-}
-
-
-/*
-    Read current interview question.
-*/
-
-readQuestionButton.addEventListener(
-    "click",
-    () => {
-
-        const question =
-            currentSession.questions[
-                currentSession.currentIndex
-            ];
-
-
-        if (!question) {
-            return;
         }
+    );
 
 
-        speakText(
-            question.question
-        );
+/* =========================================================
+   29. VOICE PRACTICE
+========================================================= */
 
-    }
-);
+const voiceQuestions = [
+
+    "Tell me about yourself and your background.",
+
+    "Why are you interested in this role?",
+
+    "What is your biggest professional strength?",
+
+    "Tell me about a challenging project you completed.",
+
+    "Describe a time when you solved a difficult problem.",
+
+    "How do you handle pressure and deadlines?",
+
+    "Tell me about a time you worked successfully in a team.",
+
+    "What technical or professional skill are you currently improving?",
+
+    "Why should we hire you?",
+
+    "Where do you see yourself in the next three years?"
+
+];
 
 
-/* ============================================================
+function loadVoiceQuestion() {
+
+    const question =
+        voiceQuestions[
+            appState.voiceQuestionIndex
+        ];
+
+
+    $("voiceQuestionText")
+        .textContent =
+        question;
+
+
+    $("voiceTranscript")
+        .innerHTML = `
+            <span class="transcript-placeholder">
+                Your speech transcript will appear here...
+            </span>
+        `;
+
+
+    appState.voiceTranscript = "";
+
+    hideElement(
+        $("voiceFeedback")
+    );
+
+}
+
+
+/* =========================================================
    VOICE RECOGNITION
-   ============================================================ */
+========================================================= */
 
-/*
-    Browser compatibility:
+function initializeSpeechRecognition() {
 
-    Chrome:
-        window.SpeechRecognition
-
-    Some browsers:
-        window.webkitSpeechRecognition
-*/
-
-const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
 
 
-if (SpeechRecognition) {
+    if (!SpeechRecognition) {
 
-    recognition =
+        $("voiceStatus").textContent =
+            "Speech recognition is not supported in this browser.";
+
+        $("voiceInstruction").textContent =
+            "Try using Google Chrome or Microsoft Edge.";
+
+        return null;
+    }
+
+
+    const recognition =
         new SpeechRecognition();
 
 
@@ -2387,9 +2352,33 @@ if (SpeechRecognition) {
 
     recognition.onstart = () => {
 
-        isListening = true;
+        appState.isListening = true;
 
-        updateVoiceUI(true);
+        $("voiceStatus").textContent =
+            "Listening... speak naturally";
+
+        $("voiceStatusDot")
+            .classList.add(
+                "recording"
+            );
+
+        $("voiceRecordBtn")
+            .classList.add(
+                "recording"
+            );
+
+        $("voiceButtonIcon")
+            .textContent =
+            "⏹";
+
+        $("voiceVisualizer")
+            .classList.add(
+                "active"
+            );
+
+        $("voiceInstruction")
+            .textContent =
+            "Speak clearly. Your answer is being transcribed.";
 
     };
 
@@ -2428,353 +2417,2321 @@ if (SpeechRecognition) {
         }
 
 
-        /*
-            Add final speech to textarea.
-
-            Existing typed text remains.
-        */
-
-        if (finalTranscript) {
-
-            const existing =
-                answerText.value.trim();
+        appState.voiceTranscript +=
+            finalTranscript;
 
 
-            answerText.value =
-                existing
-                    ? `${existing} ${finalTranscript.trim()}`
-                    : finalTranscript.trim();
-
-
-            answerText.dispatchEvent(
-                new Event("input")
-            );
-
-        }
-
-
-        voiceStatus.textContent =
-            interimTranscript
-                ? `Listening: ${interimTranscript}`
-                : "Listening...";
+        $("voiceTranscript").textContent =
+            appState.voiceTranscript +
+            interimTranscript;
 
     };
 
 
     recognition.onerror = event => {
 
-        isListening = false;
+        console.error(
+            "Speech recognition error:",
+            event.error
+        );
 
-        updateVoiceUI(false);
 
+        $("voiceStatus").textContent =
+            `Voice recognition error: ${event.error}`;
 
-        if (
-            event.error === "not-allowed"
-        ) {
-
-            showToast(
-                "Microphone permission was denied."
-            );
-
-        } else {
-
-            showToast(
-                `Voice recognition error: ${event.error}`
-            );
-
-        }
+        stopVoicePractice();
 
     };
 
 
     recognition.onend = () => {
 
-        isListening = false;
+        if (appState.isListening) {
 
-        updateVoiceUI(false);
+            /*
+               Some browsers stop recognition automatically.
+               Restart while the user is still recording.
+            */
+
+            try {
+                recognition.start();
+            } catch (error) {
+                console.log(error);
+            }
+
+        }
 
     };
 
-} else {
 
-    /*
-        Browser doesn't support speech recognition.
-    */
-
-    recognition = null;
+    return recognition;
 
 }
 
 
-/*
-    Start / stop voice recognition.
-*/
+appState.recognition =
+    initializeSpeechRecognition();
 
-function toggleVoiceRecognition() {
 
-    if (!recognition) {
+/* =========================================================
+   VOICE RECORD BUTTON
+========================================================= */
 
-        showToast(
-            "Voice recognition is not supported in this browser."
-        );
-
-        return;
-
-    }
-
-
-    if (isListening) {
-
-        recognition.stop();
-
-    } else {
-
-        try {
-
-            recognition.start();
-
-        } catch (error) {
-
-            console.error(error);
-
-        }
-
-    }
-
-}
-
-
-/*
-    Update voice buttons.
-*/
-
-function updateVoiceUI(active) {
-
-    if (active) {
-
-        voiceAnswerButton.textContent =
-            "⏹ Stop Listening";
-
-        voiceAnswerButton.classList.add(
-            "recording"
-        );
-
-
-        modalVoiceButton.textContent =
-            "⏹ Stop Speaking";
-
-        voiceStatus.textContent =
-            "Listening...";
-
-    } else {
-
-        voiceAnswerButton.textContent =
-            "🎙️ Voice Answer";
-
-        voiceAnswerButton.classList.remove(
-            "recording"
-        );
-
-
-        modalVoiceButton.textContent =
-            "🎙️ Start Speaking";
-
-        voiceStatus.textContent =
-            "Ready";
-
-    }
-
-}
-
-
-/*
-    Voice answer button.
-*/
-
-voiceAnswerButton.addEventListener(
-    "click",
-    toggleVoiceRecognition
-);
-
-
-/* ============================================================
-   VOICE MODAL
-   ============================================================ */
-
-voiceAssistantButton.addEventListener(
-    "click",
-    () => {
-
-        voiceModal.hidden = false;
-
-        voiceStatus.textContent =
-            "Ready";
-
-    }
-);
-
-
-closeVoiceModal.addEventListener(
-    "click",
-    () => {
-
-        voiceModal.hidden = true;
-
-    }
-);
-
-
-/*
-    Clicking overlay closes modal.
-*/
-
-document.querySelector(
-    ".modal-overlay"
-).addEventListener(
-    "click",
-    () => {
-
-        voiceModal.hidden = true;
-
-    }
-);
-
-
-/*
-    Modal voice button.
-*/
-
-modalVoiceButton.addEventListener(
-    "click",
-    toggleVoiceRecognition
-);
-
-
-/* ============================================================
-   KEYBOARD SUPPORT
-   ============================================================ */
-
-document.addEventListener(
-    "keydown",
-    event => {
-
-        /*
-            Escape closes modal.
-        */
-
-        if (
-            event.key === "Escape" &&
-            !voiceModal.hidden
-        ) {
-
-            voiceModal.hidden = true;
-
-        }
-
-
-        /*
-            Ctrl + Enter:
-            move to next question.
-        */
-
-        if (
-            event.ctrlKey &&
-            event.key === "Enter" &&
-            practiceScreen.classList.contains(
-                "active-screen"
-            )
-        ) {
-
-            nextButton.click();
-
-        }
-
-    }
-);
-
-
-/* ============================================================
-   THEME TOGGLE
-   ============================================================ */
-
-themeButton.addEventListener(
-    "click",
-    () => {
-
-        document.body.classList.toggle(
-            "dark-mode"
-        );
-
-
-        const dark =
-            document.body.classList.contains(
-                "dark-mode"
-            );
-
-
-        themeButton.textContent =
-            dark
-                ? "🌙"
-                : "☀️";
-
-    }
-);
-
-
-/* ============================================================
-   VOICE SYNTHESIS INITIALIZATION
-   ============================================================ */
-
-/*
-    Some browsers only populate voices after voiceschanged.
-*/
-
-if (
-    "speechSynthesis" in window
-) {
-
-    window.speechSynthesis.onvoiceschanged =
+$("voiceRecordBtn")
+    .addEventListener(
+        "click",
         () => {
 
-            window.speechSynthesis.getVoices();
+            if (!appState.recognition) {
 
-        };
+                alert(
+                    "Speech recognition is not supported by this browser."
+                );
 
-}
-
-
-/* ============================================================
-   INITIALIZATION
-   ============================================================ */
-
-function initializeApp() {
-
-    /*
-        Make sure the setup screen is visible.
-    */
-
-    showScreen(setupScreen);
+                return;
+            }
 
 
-    /*
-        Set sensible defaults.
-    */
+            if (appState.isListening) {
 
-    timerSetting.value = 120;
+                stopVoicePractice();
+
+            } else {
+
+                startVoicePractice();
+
+            }
+
+        }
+    );
 
 
-    /*
-        Voice support hint.
-    */
+function startVoicePractice() {
 
-    if (!SpeechRecognition) {
+    try {
 
-        voiceAnswerButton.title =
-            "Voice recognition is not supported by this browser.";
+        appState.recognition.start();
+
+    } catch (error) {
+
+        console.log(error);
 
     }
 
 }
 
 
-initializeApp();
+function stopVoicePractice() {
+
+    appState.isListening = false;
+
+
+    if (appState.recognition) {
+
+        try {
+            appState.recognition.stop();
+        } catch (error) {
+            console.log(error);
+        }
+
+    }
+
+
+    $("voiceStatus").textContent =
+        "Recording stopped";
+
+
+    $("voiceStatusDot")
+        .classList.remove(
+            "recording"
+        );
+
+
+    $("voiceRecordBtn")
+        .classList.remove(
+            "recording"
+        );
+
+
+    $("voiceButtonIcon")
+        .textContent =
+        "🎙";
+
+
+    $("voiceVisualizer")
+        .classList.remove(
+            "active"
+        );
+
+
+    $("voiceInstruction")
+        .textContent =
+        "Review your transcript or evaluate your answer.";
+
+}
+
+
+/* =========================================================
+   NEW VOICE QUESTION
+========================================================= */
+
+$("voiceNewQuestionBtn")
+    .addEventListener(
+        "click",
+        () => {
+
+            if (appState.isListening) {
+                stopVoicePractice();
+            }
+
+
+            appState.voiceQuestionIndex =
+                (
+                    appState.voiceQuestionIndex + 1
+                ) %
+                voiceQuestions.length;
+
+
+            loadVoiceQuestion();
+
+        }
+    );
+
+
+/* =========================================================
+   VOICE EVALUATION
+========================================================= */
+
+$("voiceEvaluateBtn")
+    .addEventListener(
+        "click",
+        evaluateVoiceAnswer
+    );
+
+
+async function evaluateVoiceAnswer() {
+
+    if (!appState.voiceTranscript.trim()) {
+        alert("Please record an answer before evaluating it.");
+        return;
+    }
+
+    const words = appState.voiceTranscript.trim().split(/\s+/).length;
+
+    let confidence = 3;
+    if (words >= 80) confidence = 5;
+    else if (words >= 50) confidence = 4;
+    else if (words >= 25) confidence = 3;
+    else if (words >= 10) confidence = 2;
+    else confidence = 1;
+
+    let lengthFeedback;
+    if (words < 20) {
+        lengthFeedback = "Your answer was quite short. Try adding a specific example or result.";
+    } else if (words > 180) {
+        lengthFeedback = "Your answer was long. Practice making your main point more concise.";
+    } else {
+        lengthFeedback = "Your answer length is reasonable. Focus on structure and clarity.";
+    }
+
+    $("voiceWordCount").textContent = words;
+    $("voiceConfidence").textContent = `${confidence}/5`;
+    $("voiceLength").textContent = lengthFeedback;
+    $("voiceFeedbackText").textContent =
+        `Practice feedback: ${lengthFeedback} Use a clear structure, avoid unnecessary filler words, and support your claims with specific examples.`;
+
+    showElement($("voiceFeedback"));
+
+    /* Each evaluated voice response is stored as its own completed session. */
+    appState.selectedSector = "Voice Practice";
+    appState.selectedType = "Voice";
+    appState.selectedLevel = "General";
+    appState.sessionAnswers = [];
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = new Date().toISOString();
+    appState.dbSessionMode = "voice";
+    appState.sessionActive = true;
+
+    const sessionCreated = await createPersistentInterviewSession("voice");
+    if (!sessionCreated) {
+        resetPracticeState();
+        return;
+    }
+
+    const record = {
+        questionIndex: appState.voiceQuestionIndex,
+        question: voiceQuestions[appState.voiceQuestionIndex],
+        answer: appState.voiceTranscript,
+        rating: confidence,
+        timestamp: new Date().toISOString(),
+        timeTaken: 0,
+        sector: "Voice Practice",
+        type: "Voice",
+        level: "General"
+    };
+
+    appState.sessionAnswers.push(record);
+    appState.allAnswers.push(record);
+
+    const saved = await persistInterviewAnswer(record);
+    if (!saved) return;
+
+    await completePersistentInterviewSession();
+
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = null;
+    appState.dbSessionMode = null;
+    appState.sessionActive = false;
+    appState.sessionAnswers = [];
+}
+
+
+
+/* =========================================================
+   30. VOICE PAGE INITIALIZATION
+========================================================= */
+
+loadVoiceQuestion();
+
+
+/* =========================================================
+   31. INITIAL APPLICATION LOAD
+========================================================= */
+
+handleRouteChange();
+
+updateHomeStats();
+
+
+/* =========================================================
+   TRANSIENT SESSION RESET / TAB-SAFE CLEANUP
+========================================================= */
+
+function resetPracticeState() {
+    stopTimer();
+
+    if (appState.recognition) {
+        try {
+            appState.recognition.stop();
+        } catch (error) {
+            console.debug("Speech recognition cleanup:", error);
+        }
+    }
+
+    appState.currentQuestionIndex = 0;
+    appState.questions = [];
+    appState.questionStartedAt = null;
+    appState.currentRating = 0;
+    appState.remainingSeconds = appState.questionTimeSeconds;
+    appState.sessionAnswers = [];
+    appState.dbSessionId = null;
+    appState.dbSessionStartedAt = null;
+    appState.dbSessionMode = null;
+    appState.sessionActive = false;
+    appState.voiceTranscript = "";
+    appState.isListening = false;
+
+    // Clear only transient browser-session data. Supabase authentication is
+    // intentionally NOT cleared, so closing a tab does not log the user out.
+    try {
+        sessionStorage.removeItem("interviewprep_active_session");
+    } catch (error) {
+        console.debug("Session storage cleanup:", error);
+    }
+}
+
+function resetUiForFreshSession() {
+    hideElement($("pressurePractice"));
+    showElement($("pressureSetup"));
+    if ($("answerInput")) $("answerInput").value = "";
+    if ($("wordCount")) $("wordCount").textContent = "0 words";
+    if ($("summaryReviewAnswers")) $("summaryReviewAnswers").innerHTML = "";
+}
+
+
+/* =========================================================
+   32. CLEANUP
+========================================================= */
+
+function handleTabCloseCleanup() {
+    resetPracticeState();
+    resetUiForFreshSession();
+}
+
+window.addEventListener("pagehide", handleTabCloseCleanup);
+window.addEventListener("beforeunload", handleTabCloseCleanup);
+
+
+/* =========================================================
+   INTERVIEWPREP PHASE 2 — SUPABASE AUTHENTICATION
+========================================================= */
+
+/*
+  IMPORTANT:
+  Replace these two values with the Project URL and
+  Publishable/Anon key from your Supabase project.
+
+  Never put the Supabase service_role key in this file.
+*/
+/* =========================================================
+   PHASE 4A — PERSISTENCE, DASHBOARD + INTERVIEW HISTORY
+========================================================= */
+
+appState.dbSessionId = null;
+appState.dbSessionStartedAt = null;
+appState.dbSessionMode = null;
+
+function phase4aConfigured() {
+    return Boolean(
+        typeof supabaseClient !== "undefined" &&
+        supabaseClient &&
+        typeof authState !== "undefined" &&
+        authState.user
+    );
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatHistoryDate(value) {
+    if (!value) return "Unknown date";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Unknown date";
+    return date.toLocaleString([], {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function historySessionTitle(session) {
+    if (session.mode === "voice") return "Voice Practice";
+    return `${session.sector || "Interview"} • ${session.interview_type || "Mixed"}`;
+}
+
+function historyAverageLabel(value) {
+    return value === null || value === undefined || value === ""
+        ? "--"
+        : `${Number(value).toFixed(1)} / 5`;
+}
+
+function historyTimeLabel(value) {
+    if (value === null || value === undefined || value === "") return "--";
+    return formatSeconds(Number(value));
+}
+
+async function createPersistentInterviewSession(mode = "pressure") {
+    if (!phase4aConfigured()) return true;
+
+    const payload = {
+        user_id: authState.user.id,
+        sector: appState.selectedSector || "Generic/Other",
+        interview_type: appState.selectedType || "Mixed",
+        experience_level: appState.selectedLevel || "Fresher/Entry-level",
+        mode,
+        question_count: appState.questions?.length || 0,
+        started_at: appState.dbSessionStartedAt || new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseClient
+        .from("interview_sessions")
+        .insert(payload)
+        .select("id")
+        .single();
+
+    if (error) {
+        console.error("Could not create interview session:", error);
+        showHistoryMessage("Your interview could not be saved. Check your Supabase database setup.", true);
+        return false;
+    }
+
+    appState.dbSessionId = data.id;
+    appState.dbSessionStartedAt = payload.started_at;
+    appState.dbSessionMode = mode;
+    return true;
+}
+
+function getQuestionId(record) {
+    return [
+        record.sector || appState.selectedSector,
+        record.type || appState.selectedType,
+        record.level || appState.selectedLevel,
+        record.questionIndex ?? 0
+    ].join("::");
+}
+
+async function persistInterviewAnswer(record) {
+    if (!phase4aConfigured() || !appState.dbSessionId) return true;
+
+    const payload = {
+        session_id: appState.dbSessionId,
+        user_id: authState.user.id,
+        question_id: getQuestionId(record),
+        question: record.question,
+        answer: record.answer || "",
+        confidence: Number(record.rating) || null,
+        time_taken_seconds: Number(record.timeTaken) || 0,
+        mode: appState.dbSessionMode || "pressure"
+    };
+
+    const { error } = await supabaseClient
+        .from("interview_answers")
+        .upsert(payload, { onConflict: "session_id,question_id" });
+
+    if (error) {
+        console.error("Could not save interview answer:", error);
+        showHistoryMessage("Your answer could not be saved to your account.", true);
+        return false;
+    }
+
+    return true;
+}
+
+async function completePersistentInterviewSession() {
+    if (!phase4aConfigured() || !appState.dbSessionId) return true;
+
+    const answers = (appState.sessionAnswers || []).filter(item => item.answer?.trim() || item.rating > 0);
+    const rated = answers.filter(item => Number(item.rating) > 0);
+    const averageConfidence = rated.length
+        ? rated.reduce((sum, item) => sum + Number(item.rating), 0) / rated.length
+        : null;
+    const averageTime = answers.length
+        ? answers.reduce((sum, item) => sum + Number(item.timeTaken || 0), 0) / answers.length
+        : null;
+
+    const { error } = await supabaseClient
+        .from("interview_sessions")
+        .update({
+            question_count: answers.length,
+            average_confidence: averageConfidence,
+            average_time_seconds: averageTime,
+            completed_at: new Date().toISOString()
+        })
+        .eq("id", appState.dbSessionId)
+        .eq("user_id", authState.user.id);
+
+    if (error) {
+        console.error("Could not complete interview session:", error);
+        return false;
+    }
+
+    return true;
+}
+
+async function persistCurrentAnswerToDatabase() {
+    if (!phase4aConfigured() || !appState.dbSessionId) return;
+    const record = appState.sessionAnswers?.find(
+        item => item.questionIndex === appState.currentQuestionIndex
+    );
+    if (!record) return;
+    await persistInterviewAnswer(record);
+}
+
+async function fetchInterviewSessions(limit = 20) {
+    if (!phase4aConfigured()) return [];
+
+    const { data, error } = await supabaseClient
+        .from("interview_sessions")
+        .select("id,user_id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,started_at,completed_at,created_at")
+        .eq("user_id", authState.user.id)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) {
+        console.error("Could not load interview history:", error);
+        return [];
+    }
+    return data || [];
+}
+
+function renderSessionCard(session, compact = false) {
+    const complete = Boolean(session.completed_at);
+    const score = historyAverageLabel(session.average_confidence);
+    const count = Number(session.question_count || 0);
+
+    return `
+        <article class="session-card" data-session-id="${escapeHtml(session.id)}">
+            <div class="session-card-header">
+                <div>
+                    <span class="session-pill">${escapeHtml(session.mode === "voice" ? "Voice" : "Interview")}</span>
+                    <h3>${escapeHtml(historySessionTitle(session))}</h3>
+                </div>
+                <span class="session-score">${escapeHtml(score)}</span>
+            </div>
+            <div class="session-card-meta">
+                <span>${escapeHtml(session.experience_level || "General")}</span>
+                <span>•</span>
+                <span>${count} question${count === 1 ? "" : "s"}</span>
+                <span>•</span>
+                <span>${escapeHtml(historyTimeLabel(session.average_time_seconds))} avg.</span>
+                <span>•</span>
+                <span>${escapeHtml(formatHistoryDate(session.created_at || session.started_at))}</span>
+            </div>
+            <div class="session-card-actions">
+                <button type="button" class="btn btn-primary btn-small" data-history-view="${escapeHtml(session.id)}">Review</button>
+                ${compact ? "" : `<button type="button" class="btn btn-secondary btn-small" data-history-delete="${escapeHtml(session.id)}">Delete</button>`}
+                ${complete ? "" : `<span class="session-pill">In progress</span>`}
+            </div>
+        </article>
+    `;
+}
+
+function renderRecentSessions(sessions) {
+    const list = $("recentSessionsList");
+    if (!list) return;
+
+    if (!phase4aConfigured()) {
+        list.innerHTML = '<div class="session-empty">Connect Supabase and log in to save interview history.</div>';
+        return;
+    }
+
+    if (!sessions.length) {
+        list.innerHTML = '<div class="session-empty">No completed interview sessions yet. Start practicing to create your first record.</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.slice(0, 3).map(session => renderSessionCard(session, true)).join("");
+}
+
+function renderHistoryList(sessions) {
+    const list = $("historyList");
+    if (!list) return;
+
+    if (!phase4aConfigured()) {
+        list.innerHTML = '<div class="session-empty">Log in with your Supabase account to view your private interview history.</div>';
+        return;
+    }
+
+    if (!sessions.length) {
+        list.innerHTML = '<div class="session-empty">No interview sessions found.</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.map(session => renderSessionCard(session)).join("");
+}
+
+async function viewHistorySession(sessionId) {
+    if (!phase4aConfigured() || !sessionId) return;
+    const details = $("historyDetails");
+    if (!details) return;
+
+    details.innerHTML = '<div class="history-details-empty"><h2>Loading session...</h2><p>Fetching your saved answers.</p></div>';
+
+    const { data: session, error: sessionError } = await supabaseClient
+        .from("interview_sessions")
+        .select("id,sector,interview_type,experience_level,mode,question_count,average_confidence,average_time_seconds,created_at,completed_at")
+        .eq("id", sessionId)
+        .eq("user_id", authState.user.id)
+        .single();
+
+    if (sessionError || !session) {
+        details.innerHTML = '<div class="history-details-empty"><h2>Session unavailable</h2><p>This session could not be loaded.</p></div>';
+        return;
+    }
+
+    const { data: answers, error: answerError } = await supabaseClient
+        .from("interview_answers")
+        .select("id,question_id,question,answer,confidence,time_taken_seconds,created_at")
+        .eq("session_id", sessionId)
+        .eq("user_id", authState.user.id)
+        .order("created_at", { ascending: true });
+
+    if (answerError) {
+        details.innerHTML = '<div class="history-details-empty"><h2>Answers unavailable</h2><p>The session exists, but its answers could not be loaded.</p></div>';
+        return;
+    }
+
+    const answerHtml = (answers || []).map((answer, index) => `
+        <article class="history-answer">
+            <span class="history-answer-number">Question ${index + 1}</span>
+            <h4>${escapeHtml(answer.question)}</h4>
+            <p>${escapeHtml(answer.answer || "No written answer was saved.")}</p>
+            <div class="history-answer-footer">
+                <span>Confidence: ${escapeHtml(answer.confidence ? `${answer.confidence}/5` : "Not rated")}</span>
+                <span>Time: ${escapeHtml(historyTimeLabel(answer.time_taken_seconds))}</span>
+            </div>
+        </article>
+    `).join("");
+
+    details.innerHTML = `
+        <div class="history-details-header">
+            <span class="session-pill">${escapeHtml(session.mode === "voice" ? "Voice Practice" : "Interview")}</span>
+            <h2>${escapeHtml(historySessionTitle(session))}</h2>
+            <p>${escapeHtml(formatHistoryDate(session.created_at))}</p>
+            <div class="session-card-meta">
+                <span>${Number(session.question_count || 0)} questions</span>
+                <span>•</span>
+                <span>${escapeHtml(historyAverageLabel(session.average_confidence))}</span>
+                <span>•</span>
+                <span>${escapeHtml(historyTimeLabel(session.average_time_seconds))} avg.</span>
+            </div>
+        </div>
+        ${answerHtml || '<div class="session-empty">No answers were saved for this session.</div>'}
+    `;
+}
+
+async function deleteHistorySession(sessionId) {
+    if (!phase4aConfigured() || !sessionId) return;
+    if (!window.confirm("Delete this interview session and its saved answers? This cannot be undone.")) return;
+
+    const { error } = await supabaseClient
+        .from("interview_sessions")
+        .delete()
+        .eq("id", sessionId)
+        .eq("user_id", authState.user.id);
+
+    if (error) {
+        showHistoryMessage("Could not delete this session.", true);
+        return;
+    }
+
+    $("historyDetails").innerHTML = '<div class="history-details-empty"><h2>Select a session</h2><p>Choose an interview from your history to review its saved answers.</p></div>';
+    await refreshPhase4AData();
+    showHistoryMessage("Interview session deleted.");
+}
+
+function showHistoryMessage(message, isError = false) {
+    const element = $("historyMessage");
+    if (!element) return;
+    element.textContent = message;
+    element.classList.remove("hidden");
+    element.style.background = isError ? "#fee2e2" : "var(--green-light)";
+    element.style.color = isError ? "var(--danger)" : "var(--green)";
+    clearTimeout(showHistoryMessage.timer);
+    showHistoryMessage.timer = setTimeout(() => element.classList.add("hidden"), 3500);
+}
+
+async function fetchPersistentAnswers(limit = 1000) {
+    if (!phase4aConfigured()) return [];
+
+    const { data, error } = await supabaseClient
+        .from("interview_answers")
+        .select("question_id,question,answer,confidence,time_taken_seconds,mode,created_at")
+        .eq("user_id", authState.user.id)
+        .order("created_at", { ascending: true })
+        .limit(limit);
+
+    if (error) {
+        console.error("Could not load interview answers:", error);
+        return [];
+    }
+
+    return (data || []).map(answer => {
+        const parts = String(answer.question_id || "").split("::");
+        const questionIndex = Number(parts[parts.length - 1]);
+
+        return {
+            questionIndex: Number.isFinite(questionIndex) ? questionIndex : 0,
+            question: answer.question || "",
+            answer: answer.answer || "",
+            rating: Number(answer.confidence) || 0,
+            timestamp: answer.created_at || new Date().toISOString(),
+            timeTaken: Number(answer.time_taken_seconds) || 0,
+            sector: parts[0] || "Generic/Other",
+            type: parts[1] || "Mixed",
+            level: parts[2] || "Fresher/Entry-level",
+            mode: answer.mode || "pressure"
+        };
+    });
+}
+
+async function refreshPhase4AData() {
+    if (!phase4aConfigured()) {
+        appState.allAnswers = [];
+        renderRecentSessions([]);
+        renderHistoryList([]);
+        return;
+    }
+
+    const [sessions, answers] = await Promise.all([
+        fetchInterviewSessions(20),
+        fetchPersistentAnswers(1000)
+    ]);
+
+    appState.allAnswers = answers;
+    renderRecentSessions(sessions);
+    renderHistoryList(sessions);
+
+    // Refresh the visible dashboard/analytics using the database-backed data.
+    if (typeof phase4aOriginalUpdateHomeStats === "function" && getRoute() === "home") {
+        phase4aOriginalUpdateHomeStats();
+    }
+
+    if (typeof phase4aOriginalUpdateProgressPage === "function" && getRoute() === "progress") {
+        phase4aOriginalUpdateProgressPage();
+    }
+}
+
+function bindPhase4AEvents() {
+    $("refreshHistoryBtn")?.addEventListener("click", refreshPhase4AData);
+
+    document.addEventListener("click", event => {
+        const viewButton = event.target.closest("[data-history-view]");
+        if (viewButton) {
+            if (getRoute() !== "history") routeTo("history");
+            setTimeout(() => viewHistorySession(viewButton.dataset.historyView), 0);
+            return;
+        }
+
+        const deleteButton = event.target.closest("[data-history-delete]");
+        if (deleteButton) {
+            deleteHistorySession(deleteButton.dataset.historyDelete);
+        }
+    });
+}
+
+// Persist the current question after the original in-memory save routine runs.
+const phase4aOriginalSaveCurrentAnswer = saveCurrentAnswer;
+saveCurrentAnswer = function () {
+    phase4aOriginalSaveCurrentAnswer();
+    persistCurrentAnswerToDatabase();
+};
+
+// Load account-backed dashboard/history whenever authentication becomes available.
+const phase4aOriginalUpdateHomeStats = updateHomeStats;
+updateHomeStats = function () {
+    phase4aOriginalUpdateHomeStats();
+    refreshPhase4AData();
+};
+
+const phase4aOriginalUpdateProgressPage = updateProgressPage;
+updateProgressPage = function () {
+    phase4aOriginalUpdateProgressPage();
+    refreshPhase4AData();
+};
+
+bindPhase4AEvents();
+
+const SUPABASE_URL = "https://vskygcjkkwjcidpxzega.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_oN2DPPNKJqlkvBkjUMHyqA_W4FfaJE7";
+
+// This is a Supabase publishable key and is safe to expose in a browser app.
+// NEVER replace it with a service_role/secret key. Configure Auth redirect URLs
+// for the production domain in Supabase before deploying.
+
+
+/*
+  Bug fix: the previous check compared SUPABASE_URL/KEY against a
+  "placeholder" string that was identical to the real values above,
+  so the condition was always false and supabaseClient was always null
+  — meaning login, signup and saving never actually worked.
+  Now we just verify the values are present and non-empty.
+*/
+const supabaseClient =
+    SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && typeof window.supabase !== "undefined"
+        ? window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_PUBLISHABLE_KEY
+        )
+        : null;
+
+const AUTH_ROUTES = new Set([
+    "login",
+    "signup",
+    "verify-email",
+    "verify-phone",
+    "forgot-password",
+    "reset-password"
+]);
+
+const PROTECTED_ROUTES = new Set([
+    /*
+      "home" removed: first-time visitors should land on the dashboard,
+      not be forced to log in. Login is still required the moment they
+      try to actually start a practice session (pressure/voice) or view
+      account-specific pages (progress/summary/history/profile).
+    */
+    "pressure",
+    "voice",
+    "progress",
+    "summary",
+    "history",
+    "profile"
+]);
+
+const PUBLIC_ROUTES = new Set([
+    "login",
+    "signup",
+    "verify-email",
+    "verify-phone",
+    "forgot-password",
+    "reset-password"
+]);
+
+const authState = {
+    session: null,
+    user: null,
+    profile: null,
+    initialized: false,
+    pendingSignup: null,
+    phoneRecovery: false // retained only for backward compatibility; phone auth is disabled
+};
+
+function authElement(id) {
+    return document.getElementById(id);
+}
+
+function showAuthMessage(id, message, type = "info") {
+    const element = authElement(id);
+    if (!element) return;
+
+    element.textContent = message;
+    element.className = `auth-message ${type}`;
+}
+
+function clearAuthMessage(id) {
+    const element = authElement(id);
+    if (!element) return;
+
+    element.textContent = "";
+    element.className = "auth-message hidden";
+}
+
+function authConfigured() {
+    return Boolean(supabaseClient);
+}
+
+function authConfigGuard() {
+    if (authConfigured()) return true;
+
+    const message =
+        "Supabase is not connected yet. Add your Supabase URL and publishable key in script.js.";
+
+    showAuthMessage("loginMessage", message, "error");
+    showAuthMessage("signupMessage", message, "error");
+    return false;
+}
+
+function getRoute() {
+    return window.location.hash.replace("#", "") || "home";
+}
+
+function routeTo(route) {
+    window.location.hash = `#${route}`;
+}
+
+function normalizePhone(phone) {
+    return phone.trim().replace(/[^\d+]/g, "");
+}
+
+function isStrongPassword(password) {
+    return (
+        password.length >= 8 &&
+        /[A-Z]/.test(password) &&
+        /[a-z]/.test(password) &&
+        /\d/.test(password) &&
+        /[^A-Za-z0-9]/.test(password)
+    );
+}
+
+function updatePasswordRequirementUI(password) {
+    const checks = {
+        length: password.length >= 8,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /\d/.test(password),
+        special: /[^A-Za-z0-9]/.test(password)
+    };
+
+    Object.entries(checks).forEach(([rule, valid]) => {
+        const element =
+            document.querySelector(`[data-rule="${rule}"]`);
+
+        if (element) {
+            element.classList.toggle("valid", valid);
+        }
+    });
+}
+
+function setAuthLoading(button, loading, loadingText = "Please wait...") {
+    if (!button) return;
+
+    if (loading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = loadingText;
+        button.disabled = true;
+        button.classList.add("btn-loading");
+    } else {
+        button.textContent =
+            button.dataset.originalText || button.textContent;
+        button.disabled = false;
+        button.classList.remove("btn-loading");
+    }
+}
+
+function setHeaderAuthUI() {
+    const guest = authElement("authGuestActions");
+    const user = authElement("authUserActions");
+
+    if (!guest || !user) return;
+
+    const loggedIn = Boolean(authState.user);
+
+    guest.classList.toggle("hidden", loggedIn);
+    user.classList.toggle("hidden", !loggedIn);
+
+    if (loggedIn) {
+        const first =
+            authState.profile?.first_name ||
+            authState.user.user_metadata?.first_name ||
+            "Account";
+
+        const last =
+            authState.profile?.last_name ||
+            authState.user.user_metadata?.last_name ||
+            "";
+
+        const displayName =
+            `${first} ${last}`.trim();
+
+        const nameElement = authElement("headerUserName");
+        const avatar = authElement("headerAvatar");
+
+        if (nameElement) {
+            nameElement.textContent = displayName;
+        }
+
+        if (avatar) {
+            avatar.src =
+                authState.profile?.avatar_url ||
+                createAvatarDataUri(displayName);
+
+            avatar.alt = `${displayName} profile picture`;
+        }
+    }
+}
+
+function createAvatarDataUri(name) {
+    const letter =
+        (name || "U").trim().charAt(0).toUpperCase();
+
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+            <rect width="128" height="128" rx="64" fill="#dbeafe"/>
+            <text x="50%" y="54%" dominant-baseline="middle"
+                text-anchor="middle"
+                font-family="Arial, sans-serif"
+                font-size="54"
+                font-weight="700"
+                fill="#2563eb">${letter}</text>
+        </svg>
+    `;
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+async function loadUserProfile() {
+    if (!supabaseClient || !authState.user) {
+        return null;
+    }
+
+    const { data, error } =
+        await supabaseClient
+            .from("profiles")
+            .select("*")
+            .eq("id", authState.user.id)
+            .maybeSingle();
+
+    if (error) {
+        console.error("Profile load error:", error);
+        return null;
+    }
+
+    if (data) {
+        authState.profile = data;
+        return data;
+    }
+
+    /*
+      Email confirmation can mean signup initially returns no session.
+      Therefore profile creation is deferred until the first authenticated
+      session if a row does not yet exist.
+    */
+    const metadata = authState.user.user_metadata || {};
+
+    const profilePayload = {
+        id: authState.user.id,
+        first_name: metadata.first_name || "User",
+        last_name: metadata.last_name || "",
+        username: metadata.username || `user_${authState.user.id.slice(0, 8)}`,
+        date_of_birth: metadata.date_of_birth || null,
+        country: metadata.country || null,
+        avatar_url: null
+    };
+
+    const { data: created, error: createError } =
+        await supabaseClient
+            .from("profiles")
+            .insert(profilePayload)
+            .select()
+            .single();
+
+    if (createError) {
+        /*
+          A username collision should not break authentication.
+          The profile can be completed from the Profile page.
+        */
+        console.warn("Profile creation deferred:", createError.message);
+        return null;
+    }
+
+    authState.profile = created;
+    return created;
+}
+
+function isEmailVerified() {
+    return Boolean(authState.user?.email_confirmed_at);
+}
+
+function isPhoneVerified() {
+    return Boolean(authState.user?.phone_confirmed_at);
+}
+
+function isFullyVerified() {
+    // Phone/SMS verification is intentionally disabled in the free deployment.
+    return isEmailVerified();
+}
+
+async function requireAuthenticatedRoute(route) {
+    if (!authConfigured()) {
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient.auth.getSession();
+
+    if (error) {
+        console.error("Session error:", error);
+    }
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (!authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+}
+
+async function routeAuthGuard() {
+    const route = getRoute();
+
+    if (!authConfigured()) {
+        /*
+          Bug fix: previously this returned immediately, which meant that
+          if the Supabase script ever failed to load (slow network,
+          blocked CDN, ad-blocker) the login/signup/profile pages became
+          completely unreachable — hashchange would fire, but nothing
+          would ever switch the visible page. Now we still show the
+          correct page section; only the session-dependent checks below
+          are skipped.
+        */
+        setHeaderAuthUI();
+
+        const fallbackPage = document.getElementById(`${route}Page`);
+        if (fallbackPage) {
+            document.querySelectorAll(".page").forEach(page => {
+                page.classList.remove("active-page");
+            });
+            fallbackPage.classList.add("active-page");
+        }
+        return;
+    }
+
+    const { data } =
+        await supabaseClient.auth.getSession();
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (authState.user) {
+        await loadUserProfile();
+    }
+
+    setHeaderAuthUI();
+
+    if (PROTECTED_ROUTES.has(route) && !authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    if (
+        route === "login" &&
+        authState.user
+    ) {
+        routeTo("home");
+        return;
+    }
+
+    if (
+        route === "signup" &&
+        authState.user
+    ) {
+        routeTo("home");
+        return;
+    }
+
+    /*
+      Preserve the existing application's router, but make sure the
+      new auth-only pages become visible.
+    */
+    const authPage = document.getElementById(`${route}Page`);
+
+    if (authPage) {
+        document.querySelectorAll(".page").forEach(page => {
+            page.classList.remove("active-page");
+        });
+
+        authPage.classList.add("active-page");
+    }
+
+    if (route === "profile" && authState.user) {
+        renderProfile();
+    }
+
+    if (route === "verify-email") {
+        updateEmailVerificationPage();
+    }
+
+    if (route === "verify-phone") {
+        // SMS verification is disabled for the free deployment.
+        routeTo("home");
+        return;
+    }
+
+    if (route === "reset-password") {
+        updateResetPasswordRoute();
+    }
+}
+
+function updateEmailVerificationPage() {
+    const text = authElement("verifyEmailText");
+
+    if (!text) return;
+
+    const email =
+        authState.user?.email ||
+        authState.pendingSignup?.email ||
+        "your email address";
+
+    text.textContent =
+        `We sent a verification link to ${email}. Open it, then return here to continue.`;
+}
+
+async function signupUser() {
+    if (!authConfigGuard()) return;
+
+    const firstName = authElement("signupFirstName").value.trim();
+    const lastName = authElement("signupLastName").value.trim();
+    const username = authElement("signupUsername").value.trim();
+    const dateOfBirth = authElement("signupDob").value;
+    const email = authElement("signupEmail").value.trim().toLowerCase();
+    const phone = normalizePhone(authElement("signupPhone").value);
+    const country = authElement("signupCountry").value.trim();
+    const password = authElement("signupPassword").value;
+    const confirmPassword = authElement("signupConfirmPassword").value;
+    const terms = authElement("signupTerms").checked;
+    const marketing = authElement("signupMarketing").checked;
+    const avatarFile = authElement("signupAvatar").files[0];
+
+    clearAuthMessage("signupMessage");
+
+    if (
+        !firstName ||
+        !lastName ||
+        !username ||
+        !dateOfBirth ||
+        !email ||
+        !country
+    ) {
+        showAuthMessage(
+            "signupMessage",
+            "Please complete all required fields.",
+            "error"
+        );
+        return;
+    }
+
+    if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
+        showAuthMessage(
+            "signupMessage",
+            "Username must be 3–30 characters and use only letters, numbers, dot, dash or underscore.",
+            "error"
+        );
+        return;
+    }
+
+    if (!isStrongPassword(password)) {
+        showAuthMessage(
+            "signupMessage",
+            "Password must contain at least 8 characters, uppercase, lowercase, number and special character.",
+            "error"
+        );
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showAuthMessage(
+            "signupMessage",
+            "Passwords do not match.",
+            "error"
+        );
+        return;
+    }
+
+    if (!terms) {
+        showAuthMessage(
+            "signupMessage",
+            "You must accept the Terms of Service and Privacy Policy.",
+            "error"
+        );
+        return;
+    }
+
+    if (avatarFile && avatarFile.size > 2 * 1024 * 1024) {
+        showAuthMessage(
+            "signupMessage",
+            "Profile picture must be 2 MB or smaller.",
+            "error"
+        );
+        return;
+    }
+
+    const submitButton = authElement("signupSubmitBtn");
+    setAuthLoading(submitButton, true, "Creating account...");
+
+    const { data, error } =
+        await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                emailRedirectTo: `${window.location.origin}${window.location.pathname}#verify-email`,
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                    username,
+                    date_of_birth: dateOfBirth,
+                    country,
+                    signup_phone: phone,
+                    marketing_opt_in: marketing
+                }
+            }
+        });
+
+    setAuthLoading(submitButton, false);
+
+    if (error) {
+        showAuthMessage(
+            "signupMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.pendingSignup = {
+        email,
+        phone,
+        firstName,
+        lastName,
+        username,
+        dateOfBirth,
+        country,
+        marketing,
+        avatarFile
+    };
+
+    /*
+      With email confirmation enabled, Supabase normally returns a user
+      without an active session. The user verifies email first.
+    */
+    if (data?.session) {
+        authState.session = data.session;
+        authState.user = data.user;
+
+        await createOrUpdateProfileFromSignup();
+        routeTo("home");
+    } else {
+        showAuthMessage(
+            "signupMessage",
+            "Account created. Check your email and click the verification link before logging in.",
+            "success"
+        );
+
+        setTimeout(() => routeTo("verify-email"), 700);
+    }
+}
+
+async function createOrUpdateProfileFromSignup() {
+    if (!authState.user || !authState.pendingSignup) return;
+
+    const pending = authState.pendingSignup;
+
+    const profilePayload = {
+        id: authState.user.id,
+        first_name: pending.firstName,
+        last_name: pending.lastName,
+        username: pending.username,
+        date_of_birth: pending.dateOfBirth || null,
+        country: pending.country || null,
+        avatar_url: null
+    };
+
+    const { error } =
+        await supabaseClient
+            .from("profiles")
+            .upsert(profilePayload, { onConflict: "id" });
+
+    if (error) {
+        console.warn("Profile creation failed:", error.message);
+    }
+
+    await loadUserProfile();
+
+    if (pending.avatarFile) {
+        await uploadAvatar(pending.avatarFile);
+    }
+}
+
+async function loginUser() {
+    if (!authConfigGuard()) return;
+
+    const email = authElement("loginEmail").value.trim().toLowerCase();
+    const password = authElement("loginPassword").value;
+
+    clearAuthMessage("loginMessage");
+
+    if (!email || !password) {
+        showAuthMessage(
+            "loginMessage",
+            "Enter your email and password.",
+            "error"
+        );
+        return;
+    }
+
+    const submitButton = authElement("loginSubmitBtn");
+    setAuthLoading(submitButton, true, "Logging in...");
+
+    const { data, error } =
+        await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+        });
+
+    setAuthLoading(submitButton, false);
+
+    if (error) {
+        showAuthMessage(
+            "loginMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.session = data.session;
+    authState.user = data.user;
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+
+    if (!isEmailVerified()) {
+        routeTo("verify-email");
+        return;
+    }
+
+    routeTo("home");
+}
+
+async function resendEmailVerification() {
+    if (!authConfigured()) return;
+
+    const email =
+        authState.user?.email ||
+        authState.pendingSignup?.email;
+
+    if (!email) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Enter your email by returning to the login page.",
+            "error"
+        );
+        return;
+    }
+
+    const button = authElement("resendEmailBtn");
+    setAuthLoading(button, true, "Sending...");
+
+    const { error } =
+        await supabaseClient.auth.resend({
+            type: "signup",
+            email
+        });
+
+    setAuthLoading(button, false);
+
+    if (error) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "verifyEmailMessage",
+        "A new verification email has been sent.",
+        "success"
+    );
+}
+
+async function continueAfterEmailVerification() {
+    if (!authConfigured()) return;
+
+    const { data } =
+        await supabaseClient.auth.getSession();
+
+    authState.session = data?.session || null;
+    authState.user = data?.session?.user || null;
+
+    if (!authState.user) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Email verified. Please log in to continue.",
+            "success"
+        );
+        setTimeout(() => routeTo("login"), 900);
+        return;
+    }
+
+    await loadUserProfile();
+
+    if (!isEmailVerified()) {
+        showAuthMessage(
+            "verifyEmailMessage",
+            "Your email is not marked as verified yet. Open the latest email and try again.",
+            "error"
+        );
+        return;
+    }
+
+    routeTo("home");
+}
+
+async function sendPhoneVerificationOtp() {
+    if (!authConfigured() || !authState.user) {
+        routeTo("login");
+        return;
+    }
+
+    const phone = normalizePhone(
+        authElement("verifyPhoneInput").value
+    );
+
+    if (!phone) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            "Enter a valid phone number.",
+            "error"
+        );
+        return;
+    }
+
+    const button = authElement("sendPhoneOtpBtn");
+    setAuthLoading(button, true, "Sending code...");
+
+    /*
+      updateUser(phone) starts the phone-change verification flow
+      for an already authenticated user.
+    */
+    const { error } =
+        await supabaseClient.auth.updateUser({
+            phone
+        });
+
+    setAuthLoading(button, false);
+
+    if (error) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "phoneVerifyMessage",
+        "Verification code sent. Enter the 6-digit code below.",
+        "success"
+    );
+}
+
+async function verifyPhoneOtp() {
+    if (!authConfigured() || !authState.user) return;
+
+    const phone = normalizePhone(
+        authElement("verifyPhoneInput").value
+    );
+
+    const token =
+        authElement("phoneOtpInput").value.trim();
+
+    if (!phone || !/^\d{6}$/.test(token)) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            "Enter the 6-digit verification code.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.verifyOtp({
+            phone,
+            token,
+            type: "phone_change"
+        });
+
+    if (error) {
+        showAuthMessage(
+            "phoneVerifyMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    const { data } =
+        await supabaseClient.auth.getUser();
+
+    authState.user = data?.user || authState.user;
+
+    await loadUserProfile();
+    setHeaderAuthUI();
+
+    showAuthMessage(
+        "phoneVerifyMessage",
+        "Phone verified successfully. Your InterviewPrep account is now fully verified.",
+        "success"
+    );
+
+    setTimeout(() => routeTo("home"), 900);
+}
+
+function preparePhoneVerificationPage() {
+    const input = authElement("verifyPhoneInput");
+    if (!input) return;
+
+    if (!input.value) {
+        input.value =
+            authState.user?.phone ||
+            authState.pendingSignup?.phone ||
+            "";
+    }
+}
+
+async function sendEmailRecovery() {
+    if (!authConfigGuard()) return;
+
+    const email =
+        authElement("recoveryEmail").value.trim().toLowerCase();
+
+    if (!email) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter your email address.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.resetPasswordForEmail(
+            email,
+            {
+                redirectTo:
+                    `${window.location.origin}${window.location.pathname}#reset-password`
+            }
+        );
+
+    /*
+      Intentionally use the same public message for success and
+      account-not-found scenarios.
+    */
+    if (error) {
+        console.warn("Recovery request:", error.message);
+    }
+
+    showAuthMessage(
+        "forgotMessage",
+        "If an account is associated with that email, a password-reset link has been sent.",
+        "success"
+    );
+}
+
+async function sendPhoneRecovery() {
+    if (!authConfigGuard()) return;
+
+    const phone =
+        normalizePhone(
+            authElement("recoveryPhone").value
+        );
+
+    if (!phone) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter your phone number.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.signInWithOtp({
+            phone,
+            options: {
+                shouldCreateUser: false
+            }
+        });
+
+    if (error) {
+        console.warn("Phone recovery request:", error.message);
+    }
+
+    showAuthMessage(
+        "forgotMessage",
+        "If an account is associated with that phone number, a recovery code has been sent.",
+        "success"
+    );
+
+    authState.phoneRecovery = true;
+}
+
+async function verifyPhoneRecoveryOtp() {
+    if (!authConfigured()) return;
+
+    const phone =
+        normalizePhone(
+            authElement("recoveryPhone").value
+        );
+
+    const token =
+        authElement("recoveryOtp").value.trim();
+
+    if (!phone || !/^\d{6}$/.test(token)) {
+        showAuthMessage(
+            "forgotMessage",
+            "Enter the 6-digit recovery code.",
+            "error"
+        );
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient.auth.verifyOtp({
+            phone,
+            token,
+            type: "sms"
+        });
+
+    if (error) {
+        showAuthMessage(
+            "forgotMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.session = data.session;
+    authState.user = data.user;
+
+    routeTo("reset-password");
+}
+
+function updateResetPasswordRoute() {
+    /*
+      The page itself is protected by the recovery session generated
+      from either email recovery or phone OTP recovery.
+    */
+    if (!authState.user) {
+        showAuthMessage(
+            "resetMessage",
+            "Your recovery session is missing or has expired. Start recovery again.",
+            "error"
+        );
+    }
+}
+
+async function resetPassword() {
+    if (!authConfigured()) return;
+
+    const password =
+        authElement("resetPassword").value;
+
+    const confirmation =
+        authElement("resetConfirmPassword").value;
+
+    if (!isStrongPassword(password)) {
+        showAuthMessage(
+            "resetMessage",
+            "Password must contain at least 8 characters, uppercase, lowercase, number and special character.",
+            "error"
+        );
+        return;
+    }
+
+    if (password !== confirmation) {
+        showAuthMessage(
+            "resetMessage",
+            "Passwords do not match.",
+            "error"
+        );
+        return;
+    }
+
+    const { error } =
+        await supabaseClient.auth.updateUser({
+            password
+        });
+
+    if (error) {
+        showAuthMessage(
+            "resetMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    showAuthMessage(
+        "resetMessage",
+        "Password updated successfully. You can now continue to your dashboard.",
+        "success"
+    );
+
+    setTimeout(() => routeTo("home"), 900);
+}
+
+async function logoutUser() {
+    if (!supabaseClient) return;
+
+    await supabaseClient.auth.signOut();
+
+    authState.session = null;
+    authState.user = null;
+    authState.profile = null;
+    resetPracticeState();
+    appState.allAnswers = [];
+    resetUiForFreshSession();
+
+    setHeaderAuthUI();
+    routeTo("login");
+}
+
+function renderProfile() {
+    if (!authState.user) return;
+
+    const profile = authState.profile || {};
+    const user = authState.user;
+
+    const displayName =
+        `${profile.first_name || user.user_metadata?.first_name || "User"} ${profile.last_name || user.user_metadata?.last_name || ""}`.trim();
+
+    const avatarUrl =
+        profile.avatar_url ||
+        createAvatarDataUri(displayName);
+
+    const avatar = authElement("profileAvatar");
+    if (avatar) {
+        avatar.src = avatarUrl;
+        avatar.alt = `${displayName} profile picture`;
+    }
+
+    const display = authElement("profileDisplayName");
+    if (display) display.textContent = displayName;
+
+    const username = authElement("profileUsername");
+    if (username) {
+        username.textContent =
+            profile.username
+                ? `@${profile.username}`
+                : "@username";
+    }
+
+    const verified = authElement("verifiedBadge");
+    if (verified) {
+        const verifiedAccount = isFullyVerified();
+        verified.textContent =
+            verifiedAccount
+                ? "● Verified account"
+                : "● Verification incomplete";
+        verified.classList.toggle(
+            "unverified",
+            !verifiedAccount
+        );
+    }
+
+    const mappings = {
+        profileFirstName: profile.first_name || "",
+        profileLastName: profile.last_name || "",
+        profileUsernameInput: profile.username || "",
+        profileDob: profile.date_of_birth || "",
+        profileCountry: profile.country || "",
+        profileEmail: user.email || "",
+        profilePhone: user.phone || "",
+        profileEmailStatus:
+            isEmailVerified()
+                ? "Verified"
+                : "Not verified",
+        profilePhoneStatus:
+            user.phone
+                ? "Configured (not required)"
+                : "Not configured"
+    };
+
+    Object.entries(mappings).forEach(([id, value]) => {
+        const element = authElement(id);
+        if (element) element.value = value;
+    });
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+
+    if (!authState.user || !supabaseClient) return;
+
+    const payload = {
+        id: authState.user.id,
+        first_name:
+            authElement("profileFirstName").value.trim(),
+        last_name:
+            authElement("profileLastName").value.trim(),
+        username:
+            authElement("profileUsernameInput").value.trim(),
+        date_of_birth:
+            authElement("profileDob").value || null,
+        country:
+            authElement("profileCountry").value.trim() || null
+    };
+
+    if (!payload.first_name || !payload.last_name || !payload.username) {
+        showAuthMessage(
+            "profileMessage",
+            "First name, last name and username are required.",
+            "error"
+        );
+        return;
+    }
+
+    const { data, error } =
+        await supabaseClient
+            .from("profiles")
+            .upsert(payload, { onConflict: "id" })
+            .select()
+            .single();
+
+    if (error) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.profile = data;
+    setHeaderAuthUI();
+    renderProfile();
+
+    showAuthMessage(
+        "profileMessage",
+        "Profile updated successfully.",
+        "success"
+    );
+}
+
+async function uploadAvatar(file) {
+    if (!file || !authState.user || !supabaseClient) {
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        showAuthMessage(
+            "profileMessage",
+            "Profile picture must be 2 MB or smaller.",
+            "error"
+        );
+        return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        showAuthMessage(
+            "profileMessage",
+            "Only JPG, PNG and WebP images are supported.",
+            "error"
+        );
+        return;
+    }
+
+    const extension =
+        file.type === "image/png"
+            ? "png"
+            : file.type === "image/webp"
+                ? "webp"
+                : "jpg";
+
+    const path =
+        `${authState.user.id}/avatar.${extension}`;
+
+    const { error: uploadError } =
+        await supabaseClient.storage
+            .from("avatars")
+            .upload(path, file, {
+                upsert: true,
+                contentType: file.type,
+                cacheControl: "3600"
+            });
+
+    if (uploadError) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(uploadError),
+            "error"
+        );
+        return;
+    }
+
+    const { data } =
+        supabaseClient.storage
+            .from("avatars")
+            .getPublicUrl(path);
+
+    const avatarUrl =
+        `${data.publicUrl}?v=${Date.now()}`;
+
+    const { data: updatedProfile, error } =
+        await supabaseClient
+            .from("profiles")
+            .update({
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", authState.user.id)
+            .select()
+            .single();
+
+    if (error) {
+        showAuthMessage(
+            "profileMessage",
+            getFriendlyAuthError(error),
+            "error"
+        );
+        return;
+    }
+
+    authState.profile = updatedProfile;
+    renderProfile();
+    setHeaderAuthUI();
+
+    showAuthMessage(
+        "profileMessage",
+        "Profile picture updated.",
+        "success"
+    );
+}
+
+function getFriendlyAuthError(error) {
+    const message =
+        String(error?.message || "Something went wrong.");
+
+    const lower = message.toLowerCase();
+
+    if (lower.includes("invalid login credentials")) {
+        return "Email or password is incorrect.";
+    }
+
+    if (lower.includes("email not confirmed")) {
+        return "Please verify your email before logging in.";
+    }
+
+    if (lower.includes("user already registered")) {
+        return "An account with these details already exists.";
+    }
+
+    if (lower.includes("password")) {
+        return message;
+    }
+
+    if (lower.includes("rate limit") || lower.includes("too many")) {
+        return "Too many attempts. Please wait a little and try again.";
+    }
+
+    return message;
+}
+
+function bindAuthEvents() {
+    authElement("loginForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            loginUser();
+        }
+    );
+
+    authElement("signupForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            signupUser();
+        }
+    );
+
+    authElement("resendEmailBtn")?.addEventListener(
+        "click",
+        resendEmailVerification
+    );
+
+    authElement("emailVerifiedBtn")?.addEventListener(
+        "click",
+        continueAfterEmailVerification
+    );
+
+    authElement("sendPhoneOtpBtn")?.addEventListener(
+        "click",
+        sendPhoneVerificationOtp
+    );
+
+    authElement("verifyPhoneOtpBtn")?.addEventListener(
+        "click",
+        verifyPhoneOtp
+    );
+
+    authElement("emailRecoveryForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            sendEmailRecovery();
+        }
+    );
+
+    authElement("phoneRecoveryForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            sendPhoneRecovery();
+        }
+    );
+
+    authElement("verifyRecoveryOtpBtn")?.addEventListener(
+        "click",
+        verifyPhoneRecoveryOtp
+    );
+
+    authElement("resetPasswordForm")?.addEventListener(
+        "submit",
+        event => {
+            event.preventDefault();
+            resetPassword();
+        }
+    );
+
+    authElement("logoutBtn")?.addEventListener(
+        "click",
+        logoutUser
+    );
+
+    authElement("profileForm")?.addEventListener(
+        "submit",
+        saveProfile
+    );
+
+    authElement("profileAvatarInput")?.addEventListener(
+        "change",
+        event => {
+            const file = event.target.files?.[0];
+            if (file) uploadAvatar(file);
+        }
+    );
+
+    authElement("signupPassword")?.addEventListener(
+        "input",
+        event => {
+            updatePasswordRequirementUI(event.target.value);
+        }
+    );
+
+    document.querySelectorAll("[data-password-toggle]").forEach(
+        button => {
+            button.addEventListener("click", () => {
+                const target =
+                    authElement(button.dataset.passwordToggle);
+
+                if (!target) return;
+
+                const showing =
+                    target.type === "text";
+
+                target.type =
+                    showing ? "password" : "text";
+
+                button.textContent =
+                    showing ? "Show" : "Hide";
+            });
+        }
+    );
+
+    document.querySelectorAll("[data-recovery]").forEach(
+        button => {
+            button.addEventListener("click", () => {
+                document.querySelectorAll("[data-recovery]")
+                    .forEach(item =>
+                        item.classList.remove("active")
+                    );
+
+                button.classList.add("active");
+
+                const emailForm =
+                    authElement("emailRecoveryForm");
+                const phoneForm =
+                    authElement("phoneRecoveryForm");
+
+                const emailMode =
+                    button.dataset.recovery === "email";
+
+                emailForm?.classList.toggle(
+                    "hidden",
+                    !emailMode
+                );
+
+                phoneForm?.classList.toggle(
+                    "hidden",
+                    emailMode
+                );
+
+                clearAuthMessage("forgotMessage");
+            });
+        }
+    );
+}
+
+function disablePaidPhoneAuthUI() {
+    const phoneRecoveryTab = document.querySelector('[data-recovery="phone"]');
+    const phoneRecoveryForm = authElement("phoneRecoveryForm");
+
+    phoneRecoveryTab?.remove();
+    phoneRecoveryForm?.remove();
+}
+
+function installAuthRouter() {
+    window.addEventListener(
+        "hashchange",
+        () => {
+            routeAuthGuard();
+        }
+    );
+}
+
+async function initializeAuthentication() {
+    if (!authConfigured()) {
+        /*
+          Bug fix: previously this returned immediately without ever
+          switching to the requested page section. If someone opened
+          the app directly on a link like #login or #signup (or
+          Supabase's script was still loading / failed to load), the
+          page would silently show the home dashboard instead of the
+          page in the URL. routeAuthGuard() already knows how to fall
+          back gracefully when Supabase isn't configured, so route
+          through it instead of stopping here.
+        */
+        setAuthHeaderFallback();
+        await routeAuthGuard();
+        return;
+    }
+
+    const {
+        data: { session }
+    } = await supabaseClient.auth.getSession();
+
+    authState.session = session;
+    authState.user = session?.user || null;
+
+    if (authState.user) {
+        await loadUserProfile();
+    }
+
+    setHeaderAuthUI();
+
+    if (authState.user) {
+        await refreshPhase4AData();
+    }
+
+    supabaseClient.auth.onAuthStateChange(
+        async (event, session) => {
+            authState.session = session;
+            authState.user = session?.user || null;
+
+            if (authState.user) {
+                await loadUserProfile();
+            } else {
+                authState.profile = null;
+                resetPracticeState();
+                appState.allAnswers = [];
+                resetUiForFreshSession();
+            }
+
+            setHeaderAuthUI();
+            if (authState.user) {
+                await refreshPhase4AData();
+            }
+
+            if (event === "PASSWORD_RECOVERY") {
+                routeTo("reset-password");
+                return;
+            }
+
+            if (
+                event === "SIGNED_IN" &&
+                authState.user &&
+                getRoute() === "login"
+            ) {
+                routeTo("home");
+            }
+        }
+    );
+
+    await routeAuthGuard();
+    authState.initialized = true;
+}
+
+function setAuthHeaderFallback() {
+    const guest = authElement("authGuestActions");
+    const user = authElement("authUserActions");
+
+    guest?.classList.remove("hidden");
+    user?.classList.add("hidden");
+}
+
+/*
+  Run after the existing InterviewPrep application has initialized.
+  This intentionally leaves the original practice logic intact while
+  adding authentication and persistent account state around it.
+*/
+bindAuthEvents();
+disablePaidPhoneAuthUI();
+installAuthRouter();
+initializeAuthentication();
